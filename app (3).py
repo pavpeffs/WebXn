@@ -15,6 +15,19 @@ SHARED_FOLDER = "shared_csvs"
 if not os.path.exists(SHARED_FOLDER):
     os.makedirs(SHARED_FOLDER)
 
+############### Setting up sublocations for grass tab ############
+expected_sublocations = {
+    "Fives": 6,
+    "3g-1": 2,
+    "3g-2": 2,
+    "Cameron Bank": 2,
+    "East (winter)": 4,
+    "South": 3,
+    "Muga": 3,
+    "Astro 1": 2,
+    "Astro 2": 2
+}
+
 #########################################################
 # Helper Functions
 #########################################################
@@ -161,13 +174,6 @@ def merge_rows_by_sublocations(df_location, expected_sublocations):
     for that location, then the sublocation is set to "ALL"; otherwise, 
     a comma-separated list of sublocations is returned.
     """
-    expected_sublocations = {
-    "3g-1": 2,
-    "3g-2": 2,
-    "Cameron Bank": 2,
-    "East (winter)": 4,
-    "South": 3,
-    }
     # Group by every column except 'sublocation'
     group_cols = ['date', 'location', 'time', 'type', 'booker', 'details']
     grouped = df_location.groupby(group_cols, as_index=False)['sublocation'].agg(lambda x: sorted(set(x)))
