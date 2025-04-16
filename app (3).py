@@ -326,12 +326,14 @@ with tabs[0]:
                     )
 
 # Grass Tab
+# your highlight function and agggrass stay the same
+
 with tabs[1]:
     st.header("Grass Weekly Overview")
     if df is None:
         st.info("No CSV loaded.")
     else:
-        # 1) Process raw CSV into a tidy DataFrame
+        # 1) Prepare DataFrame
         grass_locations = ["East (summer)", "East (winter)", "Cameron Bank", "South", "3g-1", "3g-2"]
         df_extract = df.iloc[:, 23:30].copy()
         split_col = df_extract.iloc[:, 0].str.split(" - ", expand=True)
@@ -341,11 +343,8 @@ with tabs[1]:
             df_extract.iloc[:, [3,2,4,5,6]].reset_index(drop=True)
         ], axis=1)
         df_processed.columns = ["date","location","sublocation","time","type","booker","details"]
-
-        # Ensure empty-details rows remain
         df_processed["details"] = df_processed["details"].fillna("")
 
-        # 2) Filter & sort for Grass
         df_grass = df_processed[df_processed["location"].isin(grass_locations)]
         df_grass = df_grass.sort_values(
             by=["location","sublocation","date","time","type","booker"],
@@ -355,16 +354,36 @@ with tabs[1]:
         if df_grass.empty:
             st.write("No bookings found for the Grass locations in this file.")
         else:
+            # 2) Display each location’s bookings (no Activity Begins here for 3g)
+            activity_sources = {}
             for loc in grass_locations:
                 grp = df_grass[df_grass["location"] == loc]
                 if grp.empty:
                     st.write(f"No bookings for Location: {loc}")
                     continue
 
-                # Activity Begins for 3g pitches
-                if loc in ["3g-1","3g-2"]:
-                    with st.expander(f"{loc} Activity Begins"):
-                        tmp = grp.copy()
+                # stash away the raw 3g data for later
+                if loc in ["3g-1", "3g-2"]:
+                    activity_sources[loc] = grp.copy()
+
+                with st.expander(f"Location: {loc} Bookings"):
+                    if loc in ["3g-1", "3g-2", "Cameron Bank", "South"]:
+                        display_df = agggrass(grp)
+                    else:
+                        display_df = grp[["date","location","sublocation","time","type","booker","details"]]
+
+                    styled = display_df.reset_index(drop=True).style.apply(highlight_rows, axis=1)
+                    st.dataframe(styled)
+
+            # 3) Now render the two 3g Activity Begins tables side by side, shorter height
+            st.subheader("3G Pitches: Activity Begins")
+            col1, col2 = st.columns(2)
+            for column, loc in zip((col1, col2), ["3g-1", "3g-2"]):
+                with column:
+                    src = activity_sources.get(loc)
+                    if src is not None:
+                        st.write(f"**{loc}**")
+                        tmp = src.copy()
                         tmp["start_time"] = tmp["time"].str.split(" to ").str[0]
                         act = (
                             tmp
@@ -372,23 +391,11 @@ with tabs[1]:
                             .min()
                             .rename(columns={"start_time":"activity begins"})
                         )
-                        st.dataframe(act)
-
-                # Main bookings, with location‑specific aggregation
-                with st.expander(f"Location: {loc} Bookings"):
-                    if loc in ["3g-1","3g-2","Cameron Bank","South"]:
-                        display_df = agggrass(grp)
+                        # fixed height to compress row display
+                        st.dataframe(act.reset_index(drop=True), height=200)
                     else:
-                        display_df = grp[["date","location","sublocation","time","type","booker","details"]]
+                        st.write(f"No data for {loc}")
 
-                    # Apply your highlight_rows and show interactively
-                    styled = (
-                        display_df
-                        .reset_index(drop=True)
-                        .style
-                        .apply(highlight_rows, axis=1)
-                    )
-                    st.dataframe(styled)
 
 
 # Full Processed Data Tab
