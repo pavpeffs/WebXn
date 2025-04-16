@@ -290,7 +290,8 @@ with tabs[1]:
     if df is None:
         st.info("No CSV loaded.")
     else:
-        grass_locations = ["East (summer)", "South", "East (winter)", "3g-1", "3g-2", "Cameron Bank"]
+        # Updated order of locations
+        grass_locations = ["East (summer)", "East (winter)", "Cameron Bank", "South", "3g-1", "3g-2"]
         df_extract = df.iloc[:, 23:30].copy()
         split_col = df_extract.iloc[:, 0].str.split(' - ', expand=True)
         split_col.columns = ['date', 'location']
@@ -305,16 +306,18 @@ with tabs[1]:
             for loc in grass_locations:
                 group_df = df_grass[df_grass['location'] == loc]
                 if not group_df.empty:
-                    st.subheader(f"Location: {loc}")
-                    display_df = group_df[['sublocation','date','time','type','booker','details']]
-                    st.dataframe(display_df.reset_index(drop=True))
+                    # For 3g-1 and 3g-2, display the Activity Begins table first in a collapsible expander
                     if loc in ["3g-1", "3g-2"]:
-                        st.subheader(f"{loc} Activity Begins")
-                        df_loc = group_df.copy()
-                        df_loc["start_time"] = df_loc["time"].str.split(" to ").str[0]
-                        activity_df = df_loc.groupby("date", as_index=False)["start_time"].min()
-                        activity_df.rename(columns={"start_time": "activity begins"}, inplace=True)
-                        st.dataframe(activity_df)
+                        with st.expander(f"{loc} Activity Begins"):
+                            df_loc = group_df.copy()
+                            df_loc["start_time"] = df_loc["time"].str.split(" to ").str[0]
+                            activity_df = df_loc.groupby("date", as_index=False)["start_time"].min()
+                            activity_df.rename(columns={"start_time": "activity begins"}, inplace=True)
+                            st.dataframe(activity_df.reset_index(drop=True))
+                    # Display the main bookings table in a collapsible expander
+                    with st.expander(f"Location: {loc} Bookings"):
+                        display_df = group_df[['sublocation','date','time','type','booker','details']]
+                        st.dataframe(display_df.reset_index(drop=True))
                 else:
                     st.write(f"No bookings for Location: {loc}")
 
