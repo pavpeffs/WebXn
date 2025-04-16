@@ -326,8 +326,7 @@ with tabs[0]:
                     )
 
 # Grass Tab
-# your highlight function and agggrass stay the same
-
+# (keep your existing highlight_rows and agggrass definitions)
 with tabs[1]:
     st.header("Grass Weekly Overview")
     if df is None:
@@ -362,7 +361,7 @@ with tabs[1]:
                     st.write(f"No bookings for Location: {loc}")
                     continue
 
-                # stash away the raw 3g data for later
+                # stash the raw 3g data aside
                 if loc in ["3g-1", "3g-2"]:
                     activity_sources[loc] = grp.copy()
 
@@ -375,28 +374,26 @@ with tabs[1]:
                     styled = display_df.reset_index(drop=True).style.apply(highlight_rows, axis=1)
                     st.dataframe(styled)
 
-            # 3) Now render the two 3g Activity Begins tables side by side, shorter height
+            # 3) Side-by-side collapsible 3G Activity Begins
             st.subheader("3G Pitches: Activity Begins")
             col1, col2 = st.columns(2)
             for column, loc in zip((col1, col2), ["3g-1", "3g-2"]):
                 with column:
                     src = activity_sources.get(loc)
                     if src is not None:
-                        st.write(f"**{loc}**")
-                        tmp = src.copy()
-                        tmp["start_time"] = tmp["time"].str.split(" to ").str[0]
-                        act = (
-                            tmp
-                            .groupby("date", as_index=False)["start_time"]
-                            .min()
-                            .rename(columns={"start_time":"activity begins"})
-                        )
-                        # fixed height to compress row display
-                        st.dataframe(act.reset_index(drop=True), height=200)
+                        with st.expander(f"{loc} Activity Begins"):
+                            tmp = src.copy()
+                            tmp["start_time"] = tmp["time"].str.split(" to ").str[0]
+                            act = (
+                                tmp
+                                .groupby("date", as_index=False)["start_time"]
+                                .min()
+                                .rename(columns={"start_time":"activity begins"})
+                            )
+                            # shorter height to compress rows
+                            st.dataframe(act.reset_index(drop=True), height=200)
                     else:
                         st.write(f"No data for {loc}")
-
-
 
 # Full Processed Data Tab
 with tabs[2]:
