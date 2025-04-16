@@ -3,3 +3,4 @@ pandas
 fpdf
 tabulate
 xlsxwriter
+datetime
