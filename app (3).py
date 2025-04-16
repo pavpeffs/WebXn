@@ -154,29 +154,6 @@ def highlight_rows(row):
     else:
         return [''] * len(row)
 
-def merge_rows_by_sublocations(df_location, expected_sublocations):
-    """
-    Group bookings such that rows are combined only if every column
-    except 'sublocation' is identical. The function aggregates the unique 
-    sublocations for each group. If the count matches the expected number 
-    for that location, then the sublocation is set to "ALL"; otherwise, 
-    a comma-separated list of sublocations is returned.
-    """
-    # Group by every column except 'sublocation'
-    group_cols = ['date', 'location', 'time', 'type', 'booker', 'details']
-    grouped = df_location.groupby(group_cols, as_index=False)['sublocation'].agg(lambda x: sorted(set(x)))
-    
-    def process_sublocations(row):
-        loc = row['location']
-        sublocs = row['sublocation']
-        if loc in expected_sublocations and len(sublocs) == expected_sublocations[loc]:
-            return "ALL"
-        else:
-            return ", ".join(sublocs)
-    
-    grouped['sublocation'] = grouped.apply(process_sublocations, axis=1)
-    return grouped
-
 #########################################################
 # Main App
 #########################################################
