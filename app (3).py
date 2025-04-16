@@ -369,7 +369,7 @@ with tabs[1]:
                     if loc in ["3g-1", "3g-2", "Cameron Bank", "South"]:
                         display_df = agggrass(grp)
                     else:
-                        display_df = grp[["date","location","sublocation","time","type","booker","details"]]
+                        display_df = grp[["date","sublocation","time","type","booker","details"]]
 
                     styled = display_df.reset_index(drop=True).style.apply(highlight_rows, axis=1)
                     st.dataframe(styled)
