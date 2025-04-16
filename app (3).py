@@ -154,6 +154,17 @@ def highlight_rows(row):
         return [''] * len(row)
 
 def merge_rows_by_sublocations(df_location):
+    expected_sublocations = {
+    "Fives": 6,
+    "3g-1": 2,
+    "3g-2": 2,
+    "Cameron Bank": 2,
+    "East (winter)": 4,
+    "South": 3,
+    "Muga": 3,
+    "Astro 1": 2,
+    "Astro 2": 2
+}
     # Group by all columns except 'sublocation'
     group_cols = ['date', 'location', 'time', 'type', 'booker', 'details']
     grouped = df_location.groupby(group_cols, as_index=False)['sublocation'].agg(lambda x: sorted(set(x)))
