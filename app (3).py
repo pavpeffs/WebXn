@@ -153,31 +153,26 @@ def highlight_rows(row):
     else:
         return [''] * len(row)
 
-def merge_rows_by_sublocations(df_location):
-    expected_sublocations = {
-    "Fives": 6,
-    "3g-1": 2,
-    "3g-2": 2,
-    "Cameron Bank": 2,
-    "East (winter)": 4,
-    "South": 3,
-    "Muga": 3,
-    "Astro 1": 2,
-    "Astro 2": 2
-}
-    # Group by all columns except 'sublocation'
+def merge_rows_by_sublocations(df_location, expected_sublocations):
+    """
+    Group bookings such that rows are combined only if every column
+    except 'sublocation' is identical. The function aggregates the unique 
+    sublocations for each group. If the count matches the expected number 
+    for that location, then the sublocation is set to "ALL"; otherwise, 
+    a comma-separated list of sublocations is returned.
+    """
+    # Group by every column except 'sublocation'
     group_cols = ['date', 'location', 'time', 'type', 'booker', 'details']
     grouped = df_location.groupby(group_cols, as_index=False)['sublocation'].agg(lambda x: sorted(set(x)))
-    # For each row in the grouped data, check against the expected sublocations count.
+    
     def process_sublocations(row):
         loc = row['location']
         sublocs = row['sublocation']
-        # If we have an expected count for this location and it matches, then use "ALL"
         if loc in expected_sublocations and len(sublocs) == expected_sublocations[loc]:
             return "ALL"
         else:
-            # Otherwise, join the sublocations into a comma-separated string.
             return ", ".join(sublocs)
+    
     grouped['sublocation'] = grouped.apply(process_sublocations, axis=1)
     return grouped
 
@@ -337,16 +332,7 @@ with tabs[1]:
                                   df_extract.iloc[:, [3, 2, 4, 5, 6]].reset_index(drop=True)], axis=1)
         df_processed.columns = ['date', 'location', 'sublocation', 'time', 'type', 'booker', 'details']
         df_grass = df_processed[df_processed['location'].isin(grass_locations)]
-        df_grass = df_grass.sort_values(by=['location','sublocation','date','time','type','booker'])
-        
-        # Define a function for conditional formatting
-        def highlight_rows(row):
-            if row['type'] == "Grounds-15":
-                return ['background-color: blue'] * len(row)
-            elif "(game)" in row['type']:
-                return ['background-color: yellow'] * len(row)
-            else:
-                return [''] * len(row)
+        df_grass = df_grass.sort_values(by=['location', 'sublocation', 'date', 'time', 'type', 'booker'])
         
         if df_grass.empty:
             st.write("No bookings found for the Grass locations in this file.")
@@ -354,7 +340,7 @@ with tabs[1]:
             for loc in grass_locations:
                 group_df = df_grass[df_grass['location'] == loc]
                 if not group_df.empty:
-                    # For 3g-1 and 3g-2, display the Activity Begins table first in a collapsible expander
+                    # For 3g-1 and 3g-2, show the Activity Begins table first in an expander.
                     if loc in ["3g-1", "3g-2"]:
                         with st.expander(f"{loc} Activity Begins"):
                             df_loc = group_df.copy()
@@ -362,9 +348,11 @@ with tabs[1]:
                             activity_df = df_loc.groupby("date", as_index=False)["start_time"].min()
                             activity_df.rename(columns={"start_time": "activity begins"}, inplace=True)
                             st.dataframe(activity_df.reset_index(drop=True))
-                    # Display the main bookings table using a collapsible expander with styling applied
+                    
+                    # Merge rows using the grouping function defined above.
+                    merged_df = merge_rows_by_sublocations(group_df, expected_sublocations)
                     with st.expander(f"Location: {loc} Bookings"):
-                        display_df = group_df[['sublocation','date','time','type','booker','details']]
+                        display_df = merged_df[['sublocation', 'date', 'time', 'type', 'booker', 'details']]
                         styled_df = display_df.reset_index(drop=True).style.apply(highlight_rows, axis=1)
                         st.dataframe(styled_df)
                 else:
