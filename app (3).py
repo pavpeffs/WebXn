@@ -303,23 +303,18 @@ with tabs[1]:
     else:
         # Updated order of locations
         grass_locations = ["East (summer)", "East (winter)", "Cameron Bank", "South", "3g-1", "3g-2"]
+        
+        # Process the CSV data into the expected columns
         df_extract = df.iloc[:, 23:30].copy()
         split_col = df_extract.iloc[:, 0].str.split(' - ', expand=True)
         split_col.columns = ['date', 'location']
         df_processed = pd.concat([split_col,
                                   df_extract.iloc[:, [3, 2, 4, 5, 6]].reset_index(drop=True)], axis=1)
         df_processed.columns = ['date', 'location', 'sublocation', 'time', 'type', 'booker', 'details']
-        df_grass = df_processed[df_processed['location'].isin(grass_locations)]
-        df_grass = df_grass.sort_values(by=['location','sublocation','date','time','type','booker'])
         
-        # Define a function for conditional formatting
-        def highlight_rows(row):
-            if row['type'] == "Grounds-15":
-                return ['background-color: blue'] * len(row)
-            elif "(game)" in row['type']:
-                return ['background-color: yellow'] * len(row)
-            else:
-                return [''] * len(row)
+        # Filter for Grass locations and sort appropriately
+        df_grass = df_processed[df_processed['location'].isin(grass_locations)]
+        df_grass = df_grass.sort_values(by=['location', 'sublocation', 'date', 'time', 'type', 'booker'])
         
         if df_grass.empty:
             st.write("No bookings found for the Grass locations in this file.")
@@ -327,7 +322,7 @@ with tabs[1]:
             for loc in grass_locations:
                 group_df = df_grass[df_grass['location'] == loc]
                 if not group_df.empty:
-                    # For 3g-1 and 3g-2, display the Activity Begins table first in a collapsible expander
+                    # For "3g-1" and "3g-2", display the Activity Begins table first.
                     if loc in ["3g-1", "3g-2"]:
                         with st.expander(f"{loc} Activity Begins"):
                             df_loc = group_df.copy()
@@ -335,11 +330,17 @@ with tabs[1]:
                             activity_df = df_loc.groupby("date", as_index=False)["start_time"].min()
                             activity_df.rename(columns={"start_time": "activity begins"}, inplace=True)
                             st.dataframe(activity_df.reset_index(drop=True))
-                    # Display the main bookings table using a collapsible expander with styling applied
+                    
+                    # Display the main bookings table.
                     with st.expander(f"Location: {loc} Bookings"):
-                        display_df = group_df[['sublocation','date','time','type','booker','details']]
-                        styled_df = display_df.reset_index(drop=True).style.apply(highlight_rows, axis=1)
-                        st.dataframe(styled_df)
+                        # For locations requiring condensation, aggregate the rows
+                        if loc in ["3g-1", "3g-2", "Cameron Bank", "South"]:
+                            agg_df = aggregate_bookings(group_df)
+                            display_df = agg_df[['sublocation', 'date', 'time', 'type', 'booker', 'details']]
+                        else:
+                            display_df = group_df[['sublocation', 'date', 'time', 'type', 'booker', 'details']]
+                        
+                        st.dataframe(display_df.reset_index(drop=True))
                 else:
                     st.write(f"No bookings for Location: {loc}")
 
