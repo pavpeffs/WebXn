@@ -156,36 +156,33 @@ def highlight_rows(row):
 
 def agggrass(df):
     """
-    For locations where row condensation is needed ("3g-1", "3g-2", "Cameron Bank", "South"),
-    group rows by date, time, type, booker, and details. Then, if the number of rows in the group
-    equals the expected threshold (2 for "3g-1", "3g-2", "Cameron Bank"; 3 for "South"), set sublocation to "ALL".
-    Otherwise, join distinct sublocations.
+    Condense rows for specific locations:
+    - "3g-1", "3g-2", "Cameron Bank": merge when exactly 2 matching rows → sublocation = "ALL"
+    - "South": merge when exactly 3 matching rows → sublocation = "ALL"
+    Always include rows even if details are empty.
     """
-    expected_threshold = {
-        "3g-1": 2,
-        "3g-2": 2,
-        "Cameron Bank": 2,
-        "South": 3
-    }
-    aggregated_rows = []
-    # Group the dataframe by location first
-    for loc, group in df.groupby("location"):
-        if loc in expected_threshold:
-            threshold = expected_threshold[loc]
-            # Group by the common columns (excluding sublocation)
-            agg = group.groupby(["date", "time", "type", "booker", "details"], as_index=False).agg({
-                "sublocation": lambda x: "ALL" if len(x) == threshold else ", ".join(sorted(x.unique()))
-            })
+    thresholds = {"3g-1": 2, "3g-2": 2, "Cameron Bank": 2, "South": 3}
+    out = []
+
+    # Make sure empty details (or any column) aren’t dropped by groupby
+    df = df.fillna({'date':'', 'time':'', 'type':'', 'booker':'', 'details':''})
+
+    for loc, group in df.groupby("location", sort=False):
+        if loc in thresholds:
+            thr = thresholds[loc]
+            # group by all _other_ columns
+            agg = (
+                group
+                .groupby(["date", "time", "type", "booker", "details"], as_index=False)
+                .agg({"sublocation": lambda x: "ALL" if len(x) == thr else ", ".join(sorted(x.unique()))})
+            )
             agg["location"] = loc
-            agg = agg[["date", "location", "sublocation", "time", "type", "booker", "details"]]
-            aggregated_rows.append(agg)
+            out.append(agg[["date","location","sublocation","time","type","booker","details"]])
         else:
-            # For locations not requiring condensation, keep data as is.
-            aggregated_rows.append(group[["date", "location", "sublocation", "time", "type", "booker", "details"]])
-    if aggregated_rows:
-        return pd.concat(aggregated_rows, ignore_index=True)
-    else:
-        return pd.DataFrame(columns=["date", "location", "sublocation", "time", "type", "booker", "details"])
+            # no condensation
+            out.append(group[["date","location","sublocation","time","type","booker","details"]])
+
+    return pd.concat(out, ignore_index=True)
 
 #########################################################
 # Main App
@@ -334,47 +331,64 @@ with tabs[1]:
     if df is None:
         st.info("No CSV loaded.")
     else:
-        # Updated order of locations
+        # 1) Process raw CSV into a tidy DataFrame
         grass_locations = ["East (summer)", "East (winter)", "Cameron Bank", "South", "3g-1", "3g-2"]
         df_extract = df.iloc[:, 23:30].copy()
         split_col = df_extract.iloc[:, 0].str.split(" - ", expand=True)
         split_col.columns = ["date", "location"]
         df_processed = pd.concat([
             split_col,
-            df_extract.iloc[:, [3, 2, 4, 5, 6]].reset_index(drop=True)
+            df_extract.iloc[:, [3,2,4,5,6]].reset_index(drop=True)
         ], axis=1)
-        df_processed.columns = ["date", "location", "sublocation", "time", "type", "booker", "details"]
-        
-        # Filter for Grass locations and sort
+        df_processed.columns = ["date","location","sublocation","time","type","booker","details"]
+
+        # Ensure empty-details rows remain
+        df_processed["details"] = df_processed["details"].fillna("")
+
+        # 2) Filter & sort for Grass
         df_grass = df_processed[df_processed["location"].isin(grass_locations)]
-        df_grass = df_grass.sort_values(by=["location", "sublocation", "date", "time", "type", "booker"])
-        
+        df_grass = df_grass.sort_values(
+            by=["location","sublocation","date","time","type","booker"],
+            ignore_index=True
+        )
+
         if df_grass.empty:
             st.write("No bookings found for the Grass locations in this file.")
         else:
             for loc in grass_locations:
-                group_df = df_grass[df_grass["location"] == loc]
-                if not group_df.empty:
-                    # For "3g-1" and "3g-2", display the Activity Begins table first.
-                    if loc in ["3g-1", "3g-2"]:
-                        with st.expander(f"{loc} Activity Begins"):
-                            df_loc = group_df.copy()
-                            df_loc["start_time"] = df_loc["time"].str.split(" to ").str[0]
-                            activity_df = df_loc.groupby("date", as_index=False)["start_time"].min()
-                            activity_df.rename(columns={"start_time": "activity begins"}, inplace=True)
-                            st.dataframe(activity_df.reset_index(drop=True))
-                    
-                    with st.expander(f"Location: {loc} Bookings"):
-                        # Apply agggrass for locations requiring condensation
-                        if loc in ["3g-1", "3g-2", "Cameron Bank", "South"]:
-                            agg_df = agggrass(group_df)
-                            display_df = agg_df[["sublocation", "date", "time", "type", "booker", "details"]]
-                        else:
-                            display_df = group_df[["sublocation", "date", "time", "type", "booker", "details"]]
-                        
-                        st.dataframe(display_df.reset_index(drop=True))
-                else:
+                grp = df_grass[df_grass["location"] == loc]
+                if grp.empty:
                     st.write(f"No bookings for Location: {loc}")
+                    continue
+
+                # Activity Begins for 3g pitches
+                if loc in ["3g-1","3g-2"]:
+                    with st.expander(f"{loc} Activity Begins"):
+                        tmp = grp.copy()
+                        tmp["start_time"] = tmp["time"].str.split(" to ").str[0]
+                        act = (
+                            tmp
+                            .groupby("date", as_index=False)["start_time"]
+                            .min()
+                            .rename(columns={"start_time":"activity begins"})
+                        )
+                        st.dataframe(act)
+
+                # Main bookings, with location‑specific aggregation
+                with st.expander(f"Location: {loc} Bookings"):
+                    if loc in ["3g-1","3g-2","Cameron Bank","South"]:
+                        display_df = agggrass(grp)
+                    else:
+                        display_df = grp[["date","location","sublocation","time","type","booker","details"]]
+
+                    # Apply your highlight_rows and show interactively
+                    styled = (
+                        display_df
+                        .reset_index(drop=True)
+                        .style
+                        .apply(highlight_rows, axis=1)
+                    )
+                    st.dataframe(styled)
 
 
 # Full Processed Data Tab
