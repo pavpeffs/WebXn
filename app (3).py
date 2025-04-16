@@ -154,6 +154,13 @@ def highlight_rows(row):
         return [''] * len(row)
 
 def merge_rows_by_sublocations(df_location, expected_sublocations):
+    expected_sublocations = {
+    "3g-1": 2,
+    "3g-2": 2,
+    "Cameron Bank": 2,
+    "East (winter)": 4,
+    "South": 3,
+}
     """
     Group bookings such that rows are combined only if every column
     except 'sublocation' is identical. The function aggregates the unique 
