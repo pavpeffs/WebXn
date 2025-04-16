@@ -124,7 +124,7 @@ def aggregate_bookings(df):
     expected_sub_count = {
         "Fives": 6, "3g-1": 2, "3g-2": 2,
         "Cameron Bank": 2, "East (winter)": 4, "South": 3,
-        "Muga": 3, "Astro 1": 2, "Astro 2": 2
+        "Muga": 3, "Astro 1": 2, "Astro 2": 2, "Cricket Nets": 4, "Track Lanes 1-4": 4
     }
     aggregated_rows = []
     for d in sorted(df['date'].unique()):
