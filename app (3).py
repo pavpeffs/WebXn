@@ -154,6 +154,39 @@ def highlight_rows(row):
     else:
         return [''] * len(row)
 
+def agggrass(df):
+    """
+    For locations where row condensation is needed ("3g-1", "3g-2", "Cameron Bank", "South"),
+    group rows by date, time, type, booker, and details. Then, if the number of rows in the group
+    equals the expected threshold (2 for "3g-1", "3g-2", "Cameron Bank"; 3 for "South"), set sublocation to "ALL".
+    Otherwise, join distinct sublocations.
+    """
+    expected_threshold = {
+        "3g-1": 2,
+        "3g-2": 2,
+        "Cameron Bank": 2,
+        "South": 3
+    }
+    aggregated_rows = []
+    # Group the dataframe by location first
+    for loc, group in df.groupby("location"):
+        if loc in expected_threshold:
+            threshold = expected_threshold[loc]
+            # Group by the common columns (excluding sublocation)
+            agg = group.groupby(["date", "time", "type", "booker", "details"], as_index=False).agg({
+                "sublocation": lambda x: "ALL" if len(x) == threshold else ", ".join(sorted(x.unique()))
+            })
+            agg["location"] = loc
+            agg = agg[["date", "location", "sublocation", "time", "type", "booker", "details"]]
+            aggregated_rows.append(agg)
+        else:
+            # For locations not requiring condensation, keep data as is.
+            aggregated_rows.append(group[["date", "location", "sublocation", "time", "type", "booker", "details"]])
+    if aggregated_rows:
+        return pd.concat(aggregated_rows, ignore_index=True)
+    else:
+        return pd.DataFrame(columns=["date", "location", "sublocation", "time", "type", "booker", "details"])
+
 #########################################################
 # Main App
 #########################################################
@@ -303,24 +336,24 @@ with tabs[1]:
     else:
         # Updated order of locations
         grass_locations = ["East (summer)", "East (winter)", "Cameron Bank", "South", "3g-1", "3g-2"]
-        
-        # Process the CSV data into the expected columns
         df_extract = df.iloc[:, 23:30].copy()
-        split_col = df_extract.iloc[:, 0].str.split(' - ', expand=True)
-        split_col.columns = ['date', 'location']
-        df_processed = pd.concat([split_col,
-                                  df_extract.iloc[:, [3, 2, 4, 5, 6]].reset_index(drop=True)], axis=1)
-        df_processed.columns = ['date', 'location', 'sublocation', 'time', 'type', 'booker', 'details']
+        split_col = df_extract.iloc[:, 0].str.split(" - ", expand=True)
+        split_col.columns = ["date", "location"]
+        df_processed = pd.concat([
+            split_col,
+            df_extract.iloc[:, [3, 2, 4, 5, 6]].reset_index(drop=True)
+        ], axis=1)
+        df_processed.columns = ["date", "location", "sublocation", "time", "type", "booker", "details"]
         
-        # Filter for Grass locations and sort appropriately
-        df_grass = df_processed[df_processed['location'].isin(grass_locations)]
-        df_grass = df_grass.sort_values(by=['location', 'sublocation', 'date', 'time', 'type', 'booker'])
+        # Filter for Grass locations and sort
+        df_grass = df_processed[df_processed["location"].isin(grass_locations)]
+        df_grass = df_grass.sort_values(by=["location", "sublocation", "date", "time", "type", "booker"])
         
         if df_grass.empty:
             st.write("No bookings found for the Grass locations in this file.")
         else:
             for loc in grass_locations:
-                group_df = df_grass[df_grass['location'] == loc]
+                group_df = df_grass[df_grass["location"] == loc]
                 if not group_df.empty:
                     # For "3g-1" and "3g-2", display the Activity Begins table first.
                     if loc in ["3g-1", "3g-2"]:
@@ -331,14 +364,13 @@ with tabs[1]:
                             activity_df.rename(columns={"start_time": "activity begins"}, inplace=True)
                             st.dataframe(activity_df.reset_index(drop=True))
                     
-                    # Display the main bookings table.
                     with st.expander(f"Location: {loc} Bookings"):
-                        # For locations requiring condensation, aggregate the rows
+                        # Apply agggrass for locations requiring condensation
                         if loc in ["3g-1", "3g-2", "Cameron Bank", "South"]:
-                            agg_df = aggregate_bookings(group_df)
-                            display_df = agg_df[['sublocation', 'date', 'time', 'type', 'booker', 'details']]
+                            agg_df = agggrass(group_df)
+                            display_df = agg_df[["sublocation", "date", "time", "type", "booker", "details"]]
                         else:
-                            display_df = group_df[['sublocation', 'date', 'time', 'type', 'booker', 'details']]
+                            display_df = group_df[["sublocation", "date", "time", "type", "booker", "details"]]
                         
                         st.dataframe(display_df.reset_index(drop=True))
                 else:
