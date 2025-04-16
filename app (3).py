@@ -143,6 +143,16 @@ def aggregate_bookings(df):
     else:
         return pd.DataFrame(columns=['date', 'location', 'sublocation', 'time', 'type', 'booker', 'details'])
 
+def highlight_rows(row):
+    # Priority: if type is exactly "Grounds-15", use blue; else, if it contains "(game)", use yellow.
+    if row['type'] == "Grounds-15":
+        return ['background-color: blue'] * len(row)
+    elif "(game)" in row['type']:
+        return ['background-color: yellow'] * len(row)
+    else:
+        return [''] * len(row)
+
+
 #########################################################
 # Main App
 #########################################################
@@ -300,6 +310,16 @@ with tabs[1]:
         df_processed.columns = ['date', 'location', 'sublocation', 'time', 'type', 'booker', 'details']
         df_grass = df_processed[df_processed['location'].isin(grass_locations)]
         df_grass = df_grass.sort_values(by=['location','sublocation','date','time','type','booker'])
+        
+        # Define a function for conditional formatting
+        def highlight_rows(row):
+            if row['type'] == "Grounds-15":
+                return ['background-color: blue'] * len(row)
+            elif "(game)" in row['type']:
+                return ['background-color: yellow'] * len(row)
+            else:
+                return [''] * len(row)
+        
         if df_grass.empty:
             st.write("No bookings found for the Grass locations in this file.")
         else:
@@ -314,12 +334,14 @@ with tabs[1]:
                             activity_df = df_loc.groupby("date", as_index=False)["start_time"].min()
                             activity_df.rename(columns={"start_time": "activity begins"}, inplace=True)
                             st.dataframe(activity_df.reset_index(drop=True))
-                    # Display the main bookings table in a collapsible expander
+                    # Display the main bookings table using a collapsible expander with styling applied
                     with st.expander(f"Location: {loc} Bookings"):
                         display_df = group_df[['sublocation','date','time','type','booker','details']]
-                        st.dataframe(display_df.reset_index(drop=True))
+                        styled_df = display_df.reset_index(drop=True).style.apply(highlight_rows, axis=1)
+                        st.dataframe(styled_df)
                 else:
                     st.write(f"No bookings for Location: {loc}")
+
 
 # Full Processed Data Tab
 with tabs[2]:
