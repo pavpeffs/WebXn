@@ -319,7 +319,6 @@ with tabs[0]:
                     )
 
 # Grass Tab
-# Grass Tab
  with tabs[1]:
      st.header("Grass Weekly Overview")
      if df is None:
