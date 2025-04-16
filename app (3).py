@@ -360,20 +360,22 @@ with tabs[1]:
                 if grp.empty:
                     st.write(f"No bookings for Location: {loc}")
                     continue
-
-                # stash the raw 3g data aside
+            
+                # stash 3g data aside as before…
                 if loc in ["3g-1", "3g-2"]:
                     activity_sources[loc] = grp.copy()
-
+            
                 with st.expander(f"Location: {loc} Bookings"):
                     if loc in ["3g-1", "3g-2", "Cameron Bank", "South"]:
-                        display_df = agggrass(grp)
+                        df_to_show = agggrass(grp)
                     else:
-                        display_df = grp[["date","sublocation","time","type","booker","details"]]
-
+                        df_to_show = grp
+                    
+                    # **Drop 'location' here**
+                    display_df = df_to_show[["date", "sublocation", "time", "type", "booker", "details"]]
                     styled = display_df.reset_index(drop=True).style.apply(highlight_rows, axis=1)
                     st.dataframe(styled)
-
+                    
             # 3) Side-by-side collapsible 3G Activity Begins
             st.subheader("3G Pitches: Activity Begins")
             col1, col2 = st.columns(2)
