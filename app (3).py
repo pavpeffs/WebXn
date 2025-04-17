@@ -118,9 +118,9 @@ def aggregate_bookings(df):
 def highlight_rows(row):
     # Priority: if type is exactly "Grounds-15", use blue; else, if it contains "(game)", use yellow.
     if row['type'] == "Grounds-15":
-        return ['background-color: #156082'] * len(row)
+        return ['background-color: #00B050'] * len(row)
     elif "(game)" in row['type']:
-        return ['background-color: #AB7D15'] * len(row)
+        return ['background-color: #F2B800'] * len(row)
     else:
         return [''] * len(row)
 
