@@ -14,12 +14,6 @@ st.title("Booking Viewer (Google Sheets–Backed)")
 # 1) Establish GSheets connection
 conn = st.connection("gsheets", type=GSheetsConnection)
 # Reads your spreadsheet URL from st.secrets["connections"]["gsheets"]["spreadsheet"]
-# In code, after st.connection(...)
-conn.set_default(
-    spreadsheet=st.secrets["connections"]["gsheets"]["spreadsheet"],
-    worksheet="Your Tab Name"
-)
-df = conn.read()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2) Upload CSV and sync to Google Sheets
