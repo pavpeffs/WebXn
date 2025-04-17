@@ -9,6 +9,7 @@ import os
 import uuid
 import streamlit.components.v1 as components
 from datetime import date  # To get today's date for the download filename
+from datetime import timedelta
 
 # Set up an ephemeral shared file folder (stored locally on the app)
 SHARED_FOLDER = "shared_csvs"
