@@ -475,8 +475,8 @@ with tabs[4]:
 
     # Update these paths to wherever you’ve placed your PDFs in your repo
     pdfs = {
-        "User Guide – Overview": "WebXn Guide Main.pdf",
-        "Pulling CSV from Xn":               "WebXn Guide.pdf",
+        "User Guide – Overview": "webxnguide.pdf",
+        "Pulling CSV from Xn":               "csvpullfile.pdf",
     }
 
     for title, path in pdfs.items():
