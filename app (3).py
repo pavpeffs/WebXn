@@ -212,7 +212,7 @@ else:
     df = None
 
 # Create Tabs
-tabs = st.tabs(["Daily Overview", "Grass", "Full Processed Data", "Sharing"])
+tabs = st.tabs(["Daily Overview", "Grass", "Full Processed Data", "Sharing", "How-To"])
 
 # Daily Overview Tab
 with tabs[0]:
@@ -437,34 +437,34 @@ with tabs[2]:
 
 # Sharing Tab
 with tabs[3]:
-st.header("Sharing Facilities")
-if df is None:
-    st.warning("Please load a CSV file first to enable sharing.")
-else:
-    st.subheader("Generate Shareable Code")
-    if st.button("Generate Shareable Code"):
-        try:
-            unique_id = str(uuid.uuid4())
-            file_path = os.path.join(SHARED_FOLDER, unique_id + ".csv")
-            with open(file_path, "w", encoding="latin-1") as f:
-                f.write(csv_text)
-            st.info("CSV shared successfully!")
-            
-            # Provide the unique ID for copying
-            copy_button_html = f"""
-            <div style=\"display: flex; align-items: center;\">
-                <input type=\"text\" id=\"share_code_input\" value=\"{unique_id}\" readonly style=\"width: 400px; margin-right: 10px;\"/>
-                <button onclick=\"copyCode()\">Copy to Clipboard</button>
-            </div>
-            <script>
-            function copyCode() {{
-                var copyText = document.getElementById('share_code_input');
-                copyText.select();
-                copyText.setSelectionRange(0, 99999);
-                navigator.clipboard.writeText(copyText.value);
-            }}
-            </script>
-            """
-            components.html(copy_button_html, height=100)
-        except Exception as e:
-            st.error(f"Error generating shareable code: {e}")
+    st.header("Sharing Facilities")
+    if df is None:
+        st.warning("Please load a CSV file first to enable sharing.")
+    else:
+        st.subheader("Generate Shareable Code")
+        if st.button("Generate Shareable Code"):
+            try:
+                unique_id = str(uuid.uuid4())
+                file_path = os.path.join(SHARED_FOLDER, unique_id + ".csv")
+                with open(file_path, "w", encoding="latin-1") as f:
+                    f.write(csv_text)
+                st.info("CSV shared successfully!")
+                
+                # Provide the unique ID for copying
+                copy_button_html = f"""
+                <div style=\"display: flex; align-items: center;\">
+                    <input type=\"text\" id=\"share_code_input\" value=\"{unique_id}\" readonly style=\"width: 400px; margin-right: 10px;\"/>
+                    <button onclick=\"copyCode()\">Copy to Clipboard</button>
+                </div>
+                <script>
+                function copyCode() {{
+                    var copyText = document.getElementById('share_code_input');
+                    copyText.select();
+                    copyText.setSelectionRange(0, 99999);
+                    navigator.clipboard.writeText(copyText.value);
+                }}
+                </script>
+                """
+                components.html(copy_button_html, height=100)
+            except Exception as e:
+                st.error(f"Error generating shareable code: {e}")
