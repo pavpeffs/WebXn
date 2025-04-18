@@ -173,6 +173,14 @@ with st.expander("Load CSV or Enter Share Code"):
                 with open(shared_file_path, "r", encoding="latin-1") as f:
                     csv_data_from_shared_code = f.read()
                 st.success("CSV file loaded from share code.")
+                
+                # Show download button for the loaded CSV
+                st.download_button(
+                    label="Download Shared CSV",
+                    data=csv_data_from_shared_code,
+                    file_name=f"shared_file_{share_code_input}.csv",
+                    mime="text/csv"
+                )
             except Exception as e:
                 st.error(f"Error reading CSV file from share code: {e}")
         else:
@@ -439,7 +447,8 @@ with tabs[3]:
                 with open(file_path, "w", encoding="latin-1") as f:
                     f.write(csv_text)
                 st.info("CSV shared successfully!")
-                # Copy-to-clipboard field
+                
+                # Provide the unique ID for copying
                 copy_button_html = f"""
                 <div style=\"display: flex; align-items: center;\">
                     <input type=\"text\" id=\"share_code_input\" value=\"{unique_id}\" readonly style=\"width: 400px; margin-right: 10px;\"/>
@@ -455,5 +464,13 @@ with tabs[3]:
                 </script>
                 """
                 components.html(copy_button_html, height=100)
+                
+                # Provide download button for the shared CSV
+                st.download_button(
+                    label="Download Shared CSV",
+                    data=csv_text,
+                    file_name=f"shared_file_{unique_id}.csv",
+                    mime="text/csv"
+                )
             except Exception as e:
                 st.error(f"Error generating shareable code: {e}")
