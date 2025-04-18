@@ -468,3 +468,27 @@ with tabs[3]:
                 components.html(copy_button_html, height=100)
             except Exception as e:
                 st.error(f"Error generating shareable code: {e}")
+
+with tabs[4]:
+    st.header("How‑To Guides")
+    st.write("Here are the user manuals and walk‑throughs for the app:")
+
+    # Update these paths to wherever you’ve placed your PDFs in your repo
+    pdfs = {
+        "User Guide – Overview": "WebXn Guide Main.pdf",
+        "Pulling CSV from Xn":               "WebXn Guide.pdf",
+    }
+
+    for title, path in pdfs.items():
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+            st.download_button(
+                label=f"📄 Download {title}",
+                data=data,
+                file_name=os.path.basename(path),
+                mime="application/pdf"
+            )
+        except FileNotFoundError:
+            st.error(f"Could not find `{path}`. Did you add it to your repo?")
+        st.write("---")
