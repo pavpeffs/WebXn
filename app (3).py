@@ -15,6 +15,8 @@ os.makedirs(SHARED_FOLDER, exist_ok=True)
 # Helper Functions
 #########################################################
 
+today_date = datetime.today().strftime('%Y-%m-%d')
+
 def dataframe_to_excel(df):
     """
     Converts a DataFrame to an Excel file using xlsxwriter.
@@ -178,7 +180,7 @@ with st.expander("Load CSV or Enter Share Code"):
                 st.download_button(
                     label="Download Shared CSV",
                     data=csv_data_from_shared_code,
-                    file_name=f"shared_file_{share_code_input}.csv",
+                    file_name=f"webxn-shared_{today_date}.csv",
                     mime="text/csv"
                 )
             except Exception as e:
@@ -435,42 +437,34 @@ with tabs[2]:
 
 # Sharing Tab
 with tabs[3]:
-    st.header("Sharing Facilities")
-    if df is None:
-        st.warning("Please load a CSV file first to enable sharing.")
-    else:
-        st.subheader("Generate Shareable Code")
-        if st.button("Generate Shareable Code"):
-            try:
-                unique_id = str(uuid.uuid4())
-                file_path = os.path.join(SHARED_FOLDER, unique_id + ".csv")
-                with open(file_path, "w", encoding="latin-1") as f:
-                    f.write(csv_text)
-                st.info("CSV shared successfully!")
-                
-                # Provide the unique ID for copying
-                copy_button_html = f"""
-                <div style=\"display: flex; align-items: center;\">
-                    <input type=\"text\" id=\"share_code_input\" value=\"{unique_id}\" readonly style=\"width: 400px; margin-right: 10px;\"/>
-                    <button onclick=\"copyCode()\">Copy to Clipboard</button>
-                </div>
-                <script>
-                function copyCode() {{
-                    var copyText = document.getElementById('share_code_input');
-                    copyText.select();
-                    copyText.setSelectionRange(0, 99999);
-                    navigator.clipboard.writeText(copyText.value);
-                }}
-                </script>
-                """
-                components.html(copy_button_html, height=100)
-                
-                # Provide download button for the shared CSV
-                st.download_button(
-                    label="Download Shared CSV",
-                    data=csv_text,
-                    file_name=f"shared_file_{unique_id}.csv",
-                    mime="text/csv"
-                )
-            except Exception as e:
-                st.error(f"Error generating shareable code: {e}")
+st.header("Sharing Facilities")
+if df is None:
+    st.warning("Please load a CSV file first to enable sharing.")
+else:
+    st.subheader("Generate Shareable Code")
+    if st.button("Generate Shareable Code"):
+        try:
+            unique_id = str(uuid.uuid4())
+            file_path = os.path.join(SHARED_FOLDER, unique_id + ".csv")
+            with open(file_path, "w", encoding="latin-1") as f:
+                f.write(csv_text)
+            st.info("CSV shared successfully!")
+            
+            # Provide the unique ID for copying
+            copy_button_html = f"""
+            <div style=\"display: flex; align-items: center;\">
+                <input type=\"text\" id=\"share_code_input\" value=\"{unique_id}\" readonly style=\"width: 400px; margin-right: 10px;\"/>
+                <button onclick=\"copyCode()\">Copy to Clipboard</button>
+            </div>
+            <script>
+            function copyCode() {{
+                var copyText = document.getElementById('share_code_input');
+                copyText.select();
+                copyText.setSelectionRange(0, 99999);
+                navigator.clipboard.writeText(copyText.value);
+            }}
+            </script>
+            """
+            components.html(copy_button_html, height=100)
+        except Exception as e:
+            st.error(f"Error generating shareable code: {e}")
