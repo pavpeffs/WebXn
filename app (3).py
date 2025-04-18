@@ -15,7 +15,7 @@ os.makedirs(SHARED_FOLDER, exist_ok=True)
 # Helper Functions
 #########################################################
 
-today_date = datetime.today().strftime('%Y-%m-%d')
+today_date = date.today().strftime('%d.%m.%Y')
 
 def dataframe_to_excel(df):
     """
