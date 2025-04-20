@@ -231,6 +231,10 @@ with tabs[0]:
         # Fill missing details with empty string
         df_processed["details"] = df_processed["details"].fillna("")
 
+        # Exclude specific sublocations
+        excluded_sublocations = ["Chainey", "T R 1", "T R 2"]
+        df_processed = df_processed[~df_processed["sublocation"].isin(excluded_sublocations)]
+
         date_options = sorted(df_processed['date'].unique())
         selected_dates = st.multiselect("Select Date(s)", options=["ALL"] + date_options, default=["ALL"])
         if "ALL" in selected_dates or not selected_dates:
