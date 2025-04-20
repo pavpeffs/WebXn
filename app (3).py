@@ -220,13 +220,16 @@ with tabs[0]:
     if df is None:
         st.info("No CSV loaded.")
     else:
-        # filter selections only in this tab
+        # Ensure missing details are handled
         df_extract = df.iloc[:, 23:30].copy()
         split_col = df_extract.iloc[:, 0].str.split(' - ', expand=True)
         split_col.columns = ['date', 'location']
         df_processed = pd.concat([split_col,
                                   df_extract.iloc[:, [3, 2, 4, 5, 6]].reset_index(drop=True)], axis=1)
         df_processed.columns = ['date', 'location', 'sublocation', 'time', 'type', 'booker', 'details']
+
+        # Fill missing details with empty string
+        df_processed["details"] = df_processed["details"].fillna("")
 
         date_options = sorted(df_processed['date'].unique())
         selected_dates = st.multiselect("Select Date(s)", options=["ALL"] + date_options, default=["ALL"])
@@ -239,7 +242,7 @@ with tabs[0]:
             selected_locations = location_options
 
         filtered_df = df_processed[
-            (df_processed['date'].isin(selected_dates)) &
+            (df_processed['date'].isin(selected_dates)) & 
             (df_processed['location'].isin(selected_locations))
         ]
 
