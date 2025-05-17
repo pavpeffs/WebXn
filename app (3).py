@@ -228,6 +228,13 @@ with tabs[0]:
                                   df_extract.iloc[:, [3, 2, 4, 5, 6]].reset_index(drop=True)], axis=1)
         df_processed.columns = ['date', 'location', 'sublocation', 'time', 'type', 'booker', 'details']
 
+        # Sort dates for end-start months
+        df_processed['date'] = pd.to_datetime(
+            df_processed['date'],
+            dayfirst=True,
+            format='%d.%m.%Y'
+        )
+
         # Fill missing details with empty string
         df_processed["details"] = df_processed["details"].fillna("")
 
@@ -301,6 +308,11 @@ with tabs[1]:
             df_extract.iloc[:, [3,2,4,5,6]].reset_index(drop=True)
         ], axis=1)
         df_processed.columns = ["date","location","sublocation","time","type","booker","details"]
+        df_processed['date'] = pd.to_datetime(
+            df_processed['date'],
+            dayfirst=True,
+            format='%d.%m.%Y'
+        )
         df_processed["details"] = df_processed["details"].fillna("")
 
         df_grass = df_processed[df_processed["location"].isin(grass_locations)]
@@ -433,6 +445,11 @@ with tabs[2]:
         df_processed = pd.concat([split_col,
                                   df_extract.iloc[:, [3, 2, 4, 5, 6]].reset_index(drop=True)], axis=1)
         df_processed.columns = ['date', 'location', 'sublocation', 'time', 'type', 'booker', 'details']
+        df_processed['date'] = pd.to_datetime(
+            df_processed['date'],
+            dayfirst=True,
+            format='%d.%m.%Y'
+        )
         st.dataframe(df_processed.reset_index(drop=True))
         excel_full = dataframe_to_excel(df_processed)
         st.download_button(
