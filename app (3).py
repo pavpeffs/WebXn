@@ -408,9 +408,11 @@ with tabs[1]:
                                     ]
                                     lines = []
                                     for _, r in bookings.iterrows():
+                                        # if details is blank or NaN, use the booker instead
+                                        desc = r["details"].strip() if pd.notna(r["details"]) and r["details"].strip() else r["booker"]
                                         start, end = r["time"].split(" to ")
                                         tm = f"{start.replace(':','')}-{end.replace(':','')}"
-                                        lines.append(f"{r['details']}\n{tm}")
+                                        lines.append(f"{desc}\n{tm}")
                                     cell = "\n".join(lines)
                                 ws.write(row_idx, col_idx, cell, cell_fmt)
                     output.seek(0)
