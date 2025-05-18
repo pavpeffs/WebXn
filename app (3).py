@@ -11,497 +11,229 @@ from datetime import date, timedelta
 SHARED_FOLDER = "shared_csvs"
 os.makedirs(SHARED_FOLDER, exist_ok=True)
 
+today_date = date.today().strftime('%d.%m.%Y')
+
 #########################################################
 # Helper Functions
 #########################################################
 
-today_date = date.today().strftime('%d.%m.%Y')
-
 def dataframe_to_excel(df):
-    """
-    Converts a DataFrame to an Excel file using xlsxwriter.
-    """
     df = df.fillna("")
-    col_widths = {
-        'location': 7,
-        'sublocation': 7,
-        'time': 10,
-        'type': 12,
-        'booker': 16,
-        'details': 30
-    }
+    col_widths = {'location':7,'sublocation':7,'time':10,'type':12,'booker':16,'details':30}
     output = io.BytesIO()
-    workbook = xlsxwriter.Workbook(output, {'in_memory': True, 'nan_inf_to_errors': True})
+    workbook = xlsxwriter.Workbook(output, {'in_memory':True,'nan_inf_to_errors':True})
     worksheet = workbook.add_worksheet("Sheet1")
-    header_format = workbook.add_format({
-        'bold': True, 'text_wrap': True, 'border': 1,
-        'align': 'center', 'font_size': 9
-    })
-    cell_format = workbook.add_format({
-        'text_wrap': True, 'border': 1, 'valign': 'top', 'font_size': 9
-    })
-    for col_num, header in enumerate(df.columns):
-        worksheet.write(0, col_num, header, header_format)
-        width = col_widths.get(header.lower(), 12)
-        worksheet.set_column(col_num, col_num, width, cell_format)
-    for row_num, row_data in enumerate(df.values, start=1):
-        for col_num, cell_value in enumerate(row_data):
-            worksheet.write(row_num, col_num, cell_value, cell_format)
+    header_fmt = workbook.add_format({'bold':True,'text_wrap':True,'border':1,'align':'center','font_size':9})
+    cell_fmt = workbook.add_format({'text_wrap':True,'border':1,'valign':'top','font_size':9})
+    for i, col in enumerate(df.columns):
+        worksheet.write(0, i, col, header_fmt)
+        worksheet.set_column(i, i, col_widths.get(col.lower(),12), cell_fmt)
+    for r, row in enumerate(df.values, start=1):
+        for c, val in enumerate(row):
+            worksheet.write(r, c, val, cell_fmt)
     workbook.close()
     return output.getvalue()
 
 
-def export_aggregated_excel_by_date(aggregated_all):
-    """
-    Exports aggregated data (with a 'date' column) to an Excel workbook,
-    each unique date getting its own worksheet.
-    """
+def export_aggregated_excel_by_date(all_df):
     output = io.BytesIO()
-    col_widths = {
-        'location': 7, 'sublocation': 7, 'time': 10,
-        'type': 12, 'booker': 16, 'details': 30
-    }
-    workbook = xlsxwriter.Workbook(output, {'in_memory': True, 'nan_inf_to_errors': True})
-    header_format = workbook.add_format({
-        'bold': True, 'text_wrap': True, 'border': 1,
-        'align': 'center', 'font_size': 9
-    })
-    cell_format = workbook.add_format({
-        'text_wrap': True, 'border': 1, 'valign': 'top', 'font_size': 9
-    })
-    # Ensure dates are sorted chronologically
-    unique_dates = sorted(aggregated_all['date'].unique())
-    for d in unique_dates:
-        sheet_data = aggregated_all[aggregated_all['date'] == d]
-        sheet_data = sheet_data[['location','sublocation','time','type','booker','details']]
-        sheet_name = d.strftime('%d.%m.%Y')[:31]
-        worksheet = workbook.add_worksheet(sheet_name)
-        for col_num, header in enumerate(sheet_data.columns):
-            worksheet.write(0, col_num, header, header_format)
-            width = col_widths.get(header.lower(), 12)
-            worksheet.set_column(col_num, col_num, width, cell_format)
-        for row_num, row in enumerate(sheet_data.values, start=1):
-            for col_num, cell in enumerate(row):
-                worksheet.write(row_num, col_num, cell, cell_format)
+    workbook = xlsxwriter.Workbook(output, {'in_memory':True,'nan_inf_to_errors':True})
+    header_fmt = workbook.add_format({'bold':True,'text_wrap':True,'border':1,'align':'center','font_size':9})
+    cell_fmt = workbook.add_format({'text_wrap':True,'border':1,'valign':'top','font_size':9})
+    for d in sorted(all_df['date'].unique()):
+        ws = workbook.add_worksheet(d.strftime('%d.%m.%Y')[:31])
+        sub = all_df[all_df['date']==d][['location','sublocation','time','type','booker','details']]
+        for i, col in enumerate(sub.columns):
+            ws.write(0, i, col, header_fmt)
+            ws.set_column(i, i, {'location':7,'sublocation':7,'time':10,'type':12,'booker':16,'details':30}.get(col.lower(),12), cell_fmt)
+        for r, row in enumerate(sub.values, start=1):
+            for c, val in enumerate(row): ws.write(r, c, val, cell_fmt)
     workbook.close()
     return output.getvalue()
 
 
 def aggregate_bookings(df):
-    """
-    Groups bookings by time, type, booker, and details.
-    Returns an aggregated DataFrame with columns:
-    [date, location, sublocation, time, type, booker, details].
-    """
-    expected_sub_count = {
-        "Fives": 6, "3g-1": 2, "3g-2": 2,
-        "Cameron Bank": 2, "East (winter)": 4, "South": 3,
-        "Muga": 3, "Astro 1": 2, "Astro 2": 2, "Cricket Nets": 4, "Track Lanes 1-4": 4
-    }
-    aggregated_rows = []
+    expected = {"Fives":6,"3g-1":2,"3g-2":2,"Cameron Bank":2,"East (winter)":4,"South":3,
+                "Muga":3,"Astro 1":2,"Astro 2":2,"Cricket Nets":4,"Track Lanes 1-4":4}
+    rows=[]
     for d in sorted(df['date'].unique()):
-        df_date = df[df['date'] == d]
-        for loc in sorted(df_date['location'].unique()):
-            sub_df = df_date[df_date['location'] == loc]
-            agg = sub_df.groupby(['time', 'type', 'booker', 'details'], as_index=False).agg({
-                'sublocation': lambda x: (x.iloc[0] if x.nunique() == 1
-                                          else ("ALL" if (expected_sub_count.get(loc) is not None and x.nunique() == expected_sub_count[loc])
-                                                else ", ".join(sorted(x.unique()))))
+        for loc in sorted(df[df['date']==d]['location'].unique()):
+            grp = df[(df['date']==d)&(df['location']==loc)]
+            agg = grp.groupby(['time','type','booker','details'],as_index=False).agg({
+                'sublocation':lambda x: x.iloc[0] if x.nunique()==1 else(
+                    'ALL' if expected.get(loc)==x.nunique() else ', '.join(sorted(x.unique()))
+                )
             })
-            agg['location'] = loc
-            agg['date'] = d
-            agg = agg[['date', 'location', 'sublocation', 'time', 'type', 'booker', 'details']]
-            aggregated_rows.append(agg)
-    if aggregated_rows:
-        return pd.concat(aggregated_rows, ignore_index=True)
-    else:
-        return pd.DataFrame(columns=['date', 'location', 'sublocation', 'time', 'type', 'booker', 'details'])
+            agg['date'], agg['location'] = d, loc
+            rows.append(agg[['date','location','sublocation','time','type','booker','details']])
+    return pd.concat(rows,ignore_index=True) if rows else pd.DataFrame(columns=['date','location','sublocation','time','type','booker','details'])
 
 
-def highlight_rows(row):
-    # Priority: if type is exactly "Grounds-15", use blue; else, if it contains "(game)", use yellow.
-    if row['type'] == "Grounds-15":
-        return ['background-color: #00B050'] * len(row)
-    elif "(game)" in row['type']:
-        return ['background-color: #F2B800'] * len(row)
-    else:
-        return [''] * len(row)
-
+def highlight_rows(r): return ['background-color:#00B050']*len(r) if r['type']=='Grounds-15' else(['background-color:#F2B800']*len(r) if '(game)' in r['type'] else ['']*len(r))
 
 def agggrass(df):
-    """
-    Condense rows for specific locations:
-    - "3g-1", "3g-2", "Cameron Bank": merge when exactly 2 matching rows → sublocation = "ALL"
-    - "South": merge when exactly 3 matching rows → sublocation = "ALL"
-    Always include rows even if details are empty.
-    """
-    thresholds = {"3g-1": 2, "3g-2": 2, "Cameron Bank": 2, "South": 3}
-    out = []
-
-    df = df.fillna({'date':'', 'time':'', 'type':'', 'booker':'', 'details':''})
-
-    for loc, group in df.groupby("location", sort=False):
-        if loc in thresholds:
-            thr = thresholds[loc]
-            agg = (
-                group
-                .groupby(["date", "time", "type", "booker", "details"], as_index=False)
-                .agg({"sublocation": lambda x: "ALL" if len(x) == thr else ", ".join(sorted(x.unique()))})
+    thr={'3g-1':2,'3g-2':2,'Cameron Bank':2,'South':3}
+    out=[]
+    df=df.fillna({'details':''})
+    for loc,g in df.groupby('location',sort=False):
+        if loc in thr:
+            a=g.groupby(['date','time','type','booker','details'],as_index=False).agg(
+                sublocation=lambda x:'ALL' if len(x)==thr[loc] else ', '.join(sorted(x.unique()))
             )
-            agg["location"] = loc
-            out.append(agg[["date","location","sublocation","time","type","booker","details"]])
-        else:
-            out.append(group[["date","location","sublocation","time","type","booker","details"]])
+            a['location']=loc; out.append(a)
+        else: out.append(g)
+    return pd.concat(out,ignore_index=True)
 
-    return pd.concat(out, ignore_index=True)
+st.title('Booking Viewer')
 
-#########################################################
-# Main App
-#########################################################
+# Load CSV
+df=None
+with st.expander('Load CSV or Enter Share Code'):
+    code=st.text_input('Share Code:')
+    if code:
+        p=os.path.join(SHARED_FOLDER,f'{code}.csv')
+        if os.path.exists(p):
+            t=open(p,'r',encoding='latin-1').read(); st.success('Loaded');
+            st.download_button('Download',t,f'shared_{today_date}.csv','text/csv')
+        else: st.error('Not found')
+    up=st.file_uploader('Upload CSV',type='csv')
+    if up: df=pd.read_csv(io.StringIO(up.getvalue().decode('latin-1')),header=None)
 
-st.title("Booking Viewer")
+if df is None: st.stop()
 
-# CSV Loading in an expander
-csv_data = None
-csv_data_from_shared_code = None
-with st.expander("Load CSV or Enter Share Code"):
-    share_code_input = st.text_input("Enter Share Code (if you have one) to load a shared CSV file:")
-    if share_code_input:
-        shared_file_path = os.path.join(SHARED_FOLDER, share_code_input + ".csv")
-        if os.path.exists(shared_file_path):
-            try:
-                with open(shared_file_path, "r", encoding="latin-1") as f:
-                    csv_data_from_shared_code = f.read()
-                st.success("CSV file loaded from share code.")
-                # Show download button for the loaded CSV
-                st.download_button(
-                    label="Download Shared CSV",
-                    data=csv_data_from_shared_code,
-                    file_name=f"webxn-shared_{today_date}.csv",
-                    mime="text/csv"
-                )
-            except Exception as e:
-                st.error(f"Error reading CSV file from share code: {e}")
-        else:
-            st.error("The shared CSV file was not found. Please ask for a new share code.")
+tabs=st.tabs(['Daily','Grass','Full','Sharing','How‑To'])
 
-    uploaded_file = st.file_uploader("Upload your caretakers CSV file", type="csv")
-    if uploaded_file is not None:
-        try:
-            csv_data = uploaded_file.getvalue().decode('latin-1')
-            st.success("CSV file uploaded successfully.")
-        except Exception as e:
-            st.error(f"Error processing CSV file: {e}")
-
-if csv_data_from_shared_code:
-    csv_text = csv_data_from_shared_code
-else:
-    csv_text = csv_data
-
-if csv_text:
-    try:
-        df = pd.read_csv(io.StringIO(csv_text), header=None)
-    except Exception as e:
-        st.error(f"Error processing CSV data: {e}")
-        df = None
-else:
-    df = None
-
-# Create Tabs
-tabs = st.tabs(["Daily Overview", "Grass", "Full Processed Data", "Sharing", "How-To"])
-
-# Daily Overview Tab
+# Daily
 with tabs[0]:
-    st.header("Daily Overview")
-    if df is None:
-        st.info("No CSV loaded.")
+    st.header('Daily Overview')
+    ext=df.iloc[:,23:30].copy()
+    sc=ext.iloc[:,0].str.split(' - ',expand=True); sc.columns=['date','location']
+    proc=pd.concat([sc,ext.iloc[:,[3,2,4,5,6]].reset_index(drop=True)],axis=1)
+    proc.columns=['date','location','sublocation','time','type','booker','details']
+    proc['date']=pd.to_datetime(proc['date'],dayfirst=True,infer_datetime_format=True)
+    proc['date_str']=proc['date'].dt.strftime('%d.%m.%Y')
+    proc['details']=proc['details'].fillna('')
+    excl=['Chainey','T R 1','T R 2']; proc=proc[~proc['sublocation'].isin(excl)]
+    dates=sorted(proc['date_str'].unique()); sel_dates=st.multiselect('Select Date',['ALL']+dates,default=['ALL'])
+    if 'ALL' in sel_dates: sdates=dates
+    else: sdates=sel_dates
+    locs=sorted(proc['location'].unique()); sel_locs=st.multiselect('Select Loc',['ALL']+locs,default=['ALL'])
+    if 'ALL' in sel_locs: slocs=locs
+    else: slocs=sel_locs
+    filt=proc[(proc['date_str'].isin(sdates))&(proc['location'].isin(slocs))]
+    if filt.empty: st.write('No bookings')
     else:
-        # Extract and transform
-        df_extract = df.iloc[:, 23:30].copy()
-        split_col = df_extract.iloc[:, 0].str.split(' - ', expand=True)
-        split_col.columns = ['date', 'location']
-        df_processed = pd.concat([split_col,
-                                  df_extract.iloc[:, [3, 2, 4, 5, 6]].reset_index(drop=True)], axis=1)
-        df_processed.columns = ['date', 'location', 'sublocation', 'time', 'type', 'booker', 'details']
-        # Parse to datetime and keep string for display
-        df_processed['date'] = pd.to_datetime(df_processed['date'], dayfirst=True, format='%d.%m.%Y')
-        df_processed['date_str'] = df_processed['date'].dt.strftime('%d.%m.%Y')
+        agg_list=[]
+        for ds in sorted(filt['date_str'].unique()):
+            st.subheader(f'Date: {ds}')
+            d=pd.to_datetime(ds,dayfirst=True, infer_datetime_format=True)
+            subset=filt[filt['date']==d]
+            ad=aggregate_bookings(subset); agg_list.append(ad)
+            for L in sorted(ad['location'].unique()):
+                st.subheader(f'Location: {L}')
+                dfL=ad[ad['location']==L].reset_index(drop=True)
+                for _,r in dfL.iterrows():
+                    hdr=f"Sublocation: {r['sublocation']} | Time: {r['time']} | Type: {r['type']} | Booker: {r['booker']}"
+                    with st.expander(hdr): st.write(f"Details: {r['details']}")
+        if agg_list:
+            all_a=pd.concat(agg_list,ignore_index=True)
+            st.markdown('### Export')
+            if len(filt['date_str'].unique())>1: data=export_aggregated_excel_by_date(all_a)
+            else: data=dataframe_to_excel(all_a.drop(columns=['date']))
+            st.download_button('Download Excel',data,'daily_overview.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-        df_processed['details'] = df_processed['details'].fillna("")
-        excluded_sublocations = ["Chainey", "T R 1", "T R 2"]
-        df_processed = df_processed[~df_processed['sublocation'].isin(excluded_sublocations)]
-
-        date_options = sorted(df_processed['date_str'].unique())
-        selected_dates = st.multiselect("Select Date(s)", options=["ALL"] + date_options, default=["ALL"])
-        if "ALL" in selected_dates or not selected_dates:
-            selected_dates = date_options
-
-        location_options = sorted(df_processed['location'].unique())
-        selected_locations = st.multiselect("Select Location(s)", options=["ALL"] + location_options, default=["ALL"])  
-        if "ALL" in selected_locations or not selected_locations:
-            selected_locations = location_options
-
-        filtered_df = df_processed[
-            (df_processed['date_str'].isin(selected_dates)) &
-            (df_processed['location'].isin(selected_locations))
-        ]
-
-        if filtered_df.empty:
-            st.write("No bookings found for the selected criteria.")
-        else:
-            agg_list = []
-            for d_str in sorted(filtered_df['date_str'].unique()):
-                st.subheader(f"Date: {d_str}")
-                d = pd.to_datetime(d_str, dayfirst=True, format='%d.%m.%Y')
-                data_for_date = filtered_df[filtered_df['date'] == d]
-                aggregated_df = aggregate_bookings(data_for_date)
-                agg_list.append(aggregated_df)
-                for loc in sorted(aggregated_df['location'].unique()):
-                    st.subheader(f"Location: {loc}")
-                    group_df = aggregated_df[aggregated_df['location'] == loc].reset_index(drop=True)
-                    display_df = group_df[['sublocation','time','type','booker','details']]
-                    for idx, row in display_df.iterrows():
-                        summary = (f"**Sublocation:** {row['sublocation']} | "
-                                   f"**Time:** {row['time']} | "
-                                   f"**Type:** {row['type']} | "
-                                   f"**Booker:** {row['booker']}")
-                        with st.expander(summary):
-                            st.write(f"**Details:** {row['details']}")
-            if agg_list:
-                aggregated_all = pd.concat(agg_list, ignore_index=True)
-                aggregated_export = aggregated_all.drop(columns=['date'])
-                st.markdown("### Export Daily Overview Data")
-                if len(filtered_df['date_str'].unique()) > 1:
-                    excel_daily = export_aggregated_excel_by_date(aggregated_all)
-                else:
-                    excel_daily = dataframe_to_excel(aggregated_export)
-                st.download_button(
-                    label="Download Daily Overview as Excel",
-                    data=excel_daily,
-                    file_name="daily_overview.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-    
-# Grass Tab
+# Grass
 with tabs[1]:
-    st.header("Grass Weekly Overview")
-    if df is None:
-        st.info("No CSV loaded.")
+    st.header('Grass Weekly Overview')
+    ext=df.iloc[:,23:30].copy()
+    sc=ext.iloc[:,0].str.split(' - ',expand=True); sc.columns=['date','location']
+    proc=pd.concat([sc,ext.iloc[:,[3,2,4,5,6]].reset_index(drop=True)],axis=1)
+    proc.columns=['date','location','sublocation','time','type','booker','details']
+    proc['date']=pd.to_datetime(proc['date'],dayfirst=True,infer_datetime_format=True)
+    grass_locs=["East (summer)","East (winter)","Cameron Bank","South","3g-1","3g-2"]
+    gdf=proc[proc['location'].isin(grass_locs)].sort_values(['location','sublocation','date','time','type','booker'],ignore_index=True)
+    gdf['date_str']=gdf['date'].dt.strftime('%d.%m.%Y')
+    if gdf.empty: st.write('No Grass bookings')
     else:
-        grass_locations = ["East (summer)", "East (winter)", "Cameron Bank", "South", "3g-1", "3g-2"]
-        df_extract = df.iloc[:, 23:30].copy()
-        split_col = df_extract.iloc[:, 0].str.split(" - ", expand=True)
-        split_col.columns = ["date", "location"]
-        df_processed = pd.concat([
-            split_col,
-            df_extract.iloc[:, [3,2,4,5,6]].reset_index(drop=True)
-        ], axis=1)
-        df_processed.columns = ["date","location","sublocation","time","type","booker","details"]
-        # parse to datetime
-        df_processed['date'] = pd.to_datetime(df_processed['date'], dayfirst=True, format='%d.%m.%Y')
-        # sort for logic
-        df_grass = df_processed[df_processed['location'].isin(grass_locations)]
-        df_grass = df_grass.sort_values(
-            by=["location","sublocation","date","time","type","booker"],
-            ignore_index=True
-        )
-        # keep original string for display
-        df_grass['date_str'] = df_grass['date'].dt.strftime('%d.%m.%Y')
-
-        if df_grass.empty:
-            st.write("No bookings found for the Grass locations in this file.")
-        else:
-            activity_sources = {}
-            for loc in grass_locations:
-                grp = df_grass[df_grass['location'] == loc]
-                if grp.empty:
-                    st.write(f"No bookings for Location: {loc}")
-                    continue
-                if loc in ["3g-1", "3g-2"]:
-                    activity_sources[loc] = grp.copy()
-                with st.expander(f"Location: {loc} Bookings"):
-                    if loc in ["3g-1", "3g-2", "Cameron Bank", "South"]:
-                        df_to_show = agggrass(grp)
-                    else:
-                        df_to_show = grp
-                    # swap to use date_str
-                    df_to_show['date'] = df_to_show['date'].dt.strftime('%d.%m.%Y')
-                    display_df = df_to_show[["date", "sublocation", "time", "type", "booker", "details"]]
-                    styled = display_df.reset_index(drop=True).style.apply(highlight_rows, axis=1)
-                    st.dataframe(styled)
-            # 3G Activity Begins
-            st.subheader("3G Pitches: Activity Begins")
-            col1, col2 = st.columns(2)
-            for column, loc in zip((col1, col2), ["3g-1", "3g-2"]):
-                with column:
-                    src = activity_sources.get(loc)
-                    if src is not None:
-                        with st.expander(f"{loc} Activity Begins"):
-                            tmp = src.copy()
-                            tmp['start_time'] = tmp['time'].str.split(" to ").str[0]
-                            act = (
-                                tmp
-                                .groupby("date", as_index=False)["start_time"]
-                                .min()
-                                .rename(columns={"start_time":"activity begins"})
-                            )
-                            # convert date for display
-                            act['date'] = act['date'].dt.strftime('%d.%m.%Y')
-                            st.dataframe(act.reset_index(drop=True), height=200)
-                    else:
-                        st.write(f"No data for {loc}")
-            # Launch AutoGS download
-            if not df_grass.empty:
-                df_grass['date'] = pd.to_datetime(df_grass['date'], dayfirst=True)
-                earliest = df_grass['date'].min()
-                if earliest.weekday() != 0:
-                    st.error(f"Earliest date {earliest.strftime('%A %d/%m/%Y')} is not a Monday.")
+        act_src={}
+        for loc in grass_locs:
+            grp=gdf[gdf['location']==loc]
+            if grp.empty: st.write(f'No {loc}')
+            else:
+                if loc in ['3g-1','3g-2']: act_src[loc]=grp.copy()
+                with st.expander(f'{loc} Bookings'):
+                    if loc in ['3g-1','3g-2','Cameron Bank','South']: display=agggrass(grp)
+                    else: display=grp
+                    display['date']=display['date'].dt.strftime('%d.%m.%Y')
+                    st.dataframe(display[['date','sublocation','time','type','booker','details']].style.apply(highlight_rows,axis=1))
+        st.subheader('3G Activity Begins'); c1,c2=st.columns(2)
+        for col,loc in zip((c1,c2),['3g-1','3g-2']):
+            with col:
+                src=act_src.get(loc)
+                if src is None: st.write(f'No data for {loc}')
                 else:
-                    monday = earliest
-                    week_dates = [monday + timedelta(days=i) for i in range(7)]
-                    activity = {}
-                    for loc in ["3g-1", "3g-2"]:
-                        grp = df_grass[df_grass["location"] == loc].copy()
-                        if not grp.empty:
-                            grp['start_time'] = grp['time'].str.split(" to ").str[0]
-                            act = grp.groupby("date", as_index=False)["start_time"].min()
-                            activity[loc] = dict(zip(act["date"], act["start_time"]))
-                    pitch_mappings = [
-                        ("East (winter)", "Pitch 1",  "East 1"),
-                        ("East (winter)", "Pitch 2",  "East 2"),
-                        ("East (winter)", "Pitch 3",  "East 3"),
-                        ("East (winter)", "Training", "East Training"),
-                        ("East (summer)", "Pitch 1",  "Cricket"),
-                        ("South",         "S 1",       "South 1"),
-                        ("South",         "S 2",       "South 2"),
-                        ("South",         "S 3",       "South 3"),
-                        ("Cameron Bank",  "C B 1",     "CB1"),
-                        ("Cameron Bank",  "C B 2",     "CB2"),
-                    ]
-                    pitch_names = [m[2] for m in pitch_mappings] + ["3g-1", "3g-2"]
-                    output = io.BytesIO()
-                    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-                        wb = writer.book
-                        ws = wb.add_worksheet("AutoGS")
-                        writer.sheets["AutoGS"] = ws
-                        date_fmt = wb.add_format({
-                            "num_format": "dddd\n dd/mm/yyyy",
-                            "align": "center", "valign": "vcenter", "text_wrap": True
-                        })
-                        cell_fmt = wb.add_format({
-                            "align": "center", "valign": "vcenter", "text_wrap": True
-                        })
-                        for col, dt in enumerate(week_dates, start=1):
-                            ws.write_datetime(0, col, dt, date_fmt)
-                        for row, name in enumerate(pitch_names, start=1):
-                            ws.write(row, 0, name, cell_fmt)
-                        for row_idx, name in enumerate(pitch_names, start=1):
-                            for col_idx, dt in enumerate(week_dates, start=1):
-                                if name in ["3g-1", "3g-2"]:
-                                    t = activity.get(name, {}).get(dt)
-                                    cell = f"Activity starts {t}" if t else ""
-                                else:
-                                    loc, subloc, _ = next(m for m in pitch_mappings if m[2] == name)
-                                    bookings = df_grass[
-                                        (df_grass["location"] == loc) &
-                                        (df_grass["sublocation"] == subloc) &
-                                        (df_grass["date"] == dt)
-                                    ]
-                                    lines = []
-                                    for _, r in bookings.iterrows():
-                                        start, end = r["time"].split(" to ")
-                                        tm = f"{start.replace(':','')}-{end.replace(':','')}"
-                                        lines.append(f"{r['details']}\n{tm}")
-                                    cell = "\n".join(lines)
-                                ws.write(row_idx, col_idx, cell, cell_fmt)
-                    output.seek(0)
-                    st.download_button(
-                        label="Launch AutoGS",
-                        data=output.getvalue(),
-                        file_name=f"AutoGS_{monday.strftime('%Y%m%d')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-        
-# Full Processed Data Tab
+                    with st.expander(f'{loc} Activity Begins'):
+                        tmp=src.copy(); tmp['start']=tmp['time'].str.split(' to ').str[0]
+                        act=tmp.groupby('date',as_index=False)['start'].min().rename(columns={'start':'activity begins'})
+                        act['date']=act['date'].dt.strftime('%d.%m.%Y')
+                        st.dataframe(act)
+        # AutoGS export
+        df_dates=gdf.copy(); earliest=df_dates['date'].min()
+        if earliest.weekday()!=0: st.error(f"Earliest date {earliest.strftime('%A %d/%m/%Y')} not Monday")
+        else:
+            mon=earliest; week=[mon+timedelta(days=i) for i in range(7)]
+            activity={loc:grp.groupby('date',as_index=False)['time'].apply(lambda s: s.iloc[0].split(' to ')[0]).set_index('date')['time'].to_dict() for loc,grp in df_dates[df_dates['location'].isin(['3g-1','3g-2'])].groupby('location')}
+            pitch_map=[('East (winter)','Pitch 1','East 1'),('East (winter)','Pitch 2','East 2'),('East (winter)','Pitch 3','East 3'),('East (winter)','Training','East Training'),('East (summer)','Pitch 1','Cricket'),('South','S 1','South 1'),('South','S 2','South 2'),('South','S 3','South 3'),('Cameron Bank','C B 1','CB1'),('Cameron Bank','C B 2','CB2')]
+            names=[m[2] for m in pitch_map]+['3g-1','3g-2']
+            out=io.BytesIO()
+            with pd.ExcelWriter(out,engine='xlsxwriter') as writer:
+                wb=writer.book; ws=wb.add_worksheet('AutoGS'); writer.sheets['AutoGS']=ws
+                fmt_date=wb.add_format({'num_format':'dddd\n dd/mm/yyyy','align':'center','valign':'vcenter','text_wrap':True})
+                fmt=wb.add_format({'align':'center','valign':'vcenter','text_wrap':True})
+                for c,dt in enumerate(week,start=1): ws.write_datetime(0,c,dt,fmt_date)
+                for r,name in enumerate(names,start=1): ws.write(r,0,name,fmt)
+                for r,name in enumerate(names,start=1):
+                    for c,dt in enumerate(week,start=1):
+                        if name in activity: cell=f"Activity starts {activity[name].get(dt,'')}"
+                        else:
+                            loc,subl,_=next(m for m in pitch_map if m[2]==name)
+                            bk=gdf[(gdf['location']==loc)&(gdf['sublocation']==subl)&(gdf['date']==dt)]
+                            lines=[f"{d['details']}\n{d['time'].replace(':','').replace(' to ','-')}" for _,d in bk.iterrows()]
+                            cell='\n'.join(lines)
+                        ws.write(r,c,cell,fmt)
+            out.seek(0)
+            st.download_button('Launch AutoGS',out.getvalue(),f'AutoGS_{mon.strftime("%Y%m%d")}.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+# Full Processed Data
 with tabs[2]:
-    st.header("Full Processed Data")
-    if df is None:
-        st.info("No CSV loaded.")
-    else:
-        df_extract = df.iloc[:, 23:30].copy()
-        split_col = df_extract.iloc[:, 0].str.split(' - ', expand=True)
-        split_col.columns = ['date', 'location']
-        df_processed = pd.concat([split_col,
-                                  df_extract.iloc[:, [3, 2, 4, 5, 6]].reset_index(drop=True)], axis=1)
-        df_processed.columns = ['date', 'location', 'sublocation', 'time', 'type', 'booker', 'details']
-        df_processed['date'] = pd.to_datetime(
-            df_processed['date'],
-            dayfirst=True,
-            format='%d.%m.%Y'
-        )
-        st.dataframe(df_processed.reset_index(drop=True))
-        excel_full = dataframe_to_excel(df_processed)
-        st.download_button(
-            label="Download Full Processed Data as Excel",
-            data=excel_full,
-            file_name="full_processed_data.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+    st.header('Full Processed Data')
+    ext=df.iloc[:,23:30].copy()
+    sc=ext.iloc[:,0].str.split(' - ',expand=True); sc.columns=['date','location']
+    proc=pd.concat([sc,ext.iloc[:,[3,2,4,5,6]].reset_index(drop=True)],axis=1)
+    proc.columns=['date','location','sublocation','time','type','booker','details']
+    proc['date']=pd.to_datetime(proc['date'],dayfirst=True,infer_datetime_format=True)
+    proc['date']=proc['date'].dt.strftime('%d.%m.%Y')
+    st.dataframe(proc)
+    st.download_button('Download Full Processed Data',dataframe_to_excel(proc),'full_processed_data.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-# Sharing Tab
+# Sharing
 with tabs[3]:
-    st.header("Sharing Facilities")
-    if df is None:
-        st.warning("Please load a CSV file first to enable sharing.")
+    st.header('Sharing Facilities')
+    if df is None: st.warning('Load CSV first')
     else:
-        st.subheader("Generate Shareable Code")
-        if st.button("Generate Shareable Code"):
-            try:
-                unique_id = str(uuid.uuid4())
-                file_path = os.path.join(SHARED_FOLDER, unique_id + ".csv")
-                with open(file_path, "w", encoding="latin-1") as f:
-                    f.write(csv_text)
-                st.info("CSV shared successfully!")
-                
-                # Provide the unique ID for copying
-                copy_button_html = f"""
-                <div style=\"display: flex; align-items: center;\">
-                    <input type=\"text\" id=\"share_code_input\" value=\"{unique_id}\" readonly style=\"width: 400px; margin-right: 10px;\"/>
-                    <button onclick=\"copyCode()\">Copy to Clipboard</button>
-                </div>
-                <script>
-                function copyCode() {{
-                    var copyText = document.getElementById('share_code_input');
-                    copyText.select();
-                    copyText.setSelectionRange(0, 99999);
-                    navigator.clipboard.writeText(copyText.value);
-                }}
-                </script>
-                """
-                components.html(copy_button_html, height=100)
-            except Exception as e:
-                st.error(f"Error generating shareable code: {e}")
+        if st.button('Generate Shareable Code'):
+            uid=str(uuid.uuid4()); p=os.path.join(SHARED_FOLDER,f'{uid}.csv')
+            open(p,'w',encoding='latin-1').write(df.to_csv(header=False,index=False))
+            st.info('CSV shared!')
+            components.html(f"<input value='{uid}' readonly/><button onclick='navigator.clipboard.writeText(this.previousElementSibling.value)'>Copy</button>",height=100)
 
+# How-To
 with tabs[4]:
-    st.header("How‑To Guides")
-    st.write("Here are the user manuals and walk‑throughs for the app:")
-
-    # Update these paths to wherever you’ve placed your PDFs in your repo
-    pdfs = {
-        "User Guide – Overview": "webxnguide.pdf",
-        "Pulling CSV from Xn":               "csvpullfile.pdf",
-    }
-
-    for title, path in pdfs.items():
+    st.header('How‑To Guides')
+    guides={'User Guide – Overview':'webxnguide.pdf','Pulling CSV from Xn':'csvpullfile.pdf'}
+    for title,path in guides.items():
         try:
-            with open(path, "rb") as f:
-                data = f.read()
-            st.download_button(
-                label=f"📄 Download {title}",
-                data=data,
-                file_name=os.path.basename(path),
-                mime="application/pdf"
-            )
+            data=open(path,'rb').read()
+            st.download_button(f'📄 Download {title}',data,path,'application/pdf')
         except FileNotFoundError:
-            st.error(f"Could not find `{path}`. Did you add it to your repo?")
-        st.write("---")
+            st.error(f'Missing {path}')
