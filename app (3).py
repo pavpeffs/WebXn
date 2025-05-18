@@ -348,78 +348,106 @@ with tabs[1]:
                             st.dataframe(act.reset_index(drop=True), height=200)
                     else:
                         st.write(f"No data for {loc}")
-            # Launch AutoGS download
-            if not df_grass.empty:
-                # ensure dates are datetimes
-                df_grass["date"] = pd.to_datetime(df_grass["date"], dayfirst=True)
-                earliest = df_grass["date"].min()
-                if earliest.weekday() != 0:
-                    st.error(f"Earliest date {earliest.strftime('%A %d/%m/%Y')} is not a Monday.")
-                else:
-                    monday = earliest
-                    week_dates = [monday + timedelta(days=i) for i in range(7)]
-                    activity = {}
-                    for loc in ["3g-1", "3g-2"]:
-                        grp = df_grass[df_grass["location"] == loc].copy()
-                        if not grp.empty:
-                            grp["start_time"] = grp["time"].str.split(" to ").str[0]
-                            act = grp.groupby("date", as_index=False)["start_time"].min()
-                            activity[loc] = dict(zip(act["date"], act["start_time"]))
-                    pitch_mappings = [
-                        ("East (winter)", "Pitch 1",  "East 1"),
-                        ("East (winter)", "Pitch 2",  "East 2"),
-                        ("East (winter)", "Pitch 3",  "East 3"),
-                        ("East (winter)", "Training", "East Training"),
-                        ("East (summer)", "Pitch 1",  "Cricket"),
-                        ("South",         "S 1",       "South 1"),
-                        ("South",         "S 2",       "South 2"),
-                        ("South",         "S 3",       "South 3"),
-                        ("Cameron Bank",  "C B 1",     "CB1"),
-                        ("Cameron Bank",  "C B 2",     "CB2"),
-                    ]
-                    pitch_names = [m[2] for m in pitch_mappings] + ["3g-1", "3g-2"]
-                    output = io.BytesIO()
-                    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-                        wb = writer.book
-                        ws = wb.add_worksheet("AutoGS")
-                        writer.sheets["AutoGS"] = ws
-                        date_fmt = wb.add_format({
-                            "num_format": "dddd\n dd/mm/yyyy",
-                            "align": "center", "valign": "vcenter", "text_wrap": True
-                        })
-                        cell_fmt = wb.add_format({
-                            "align": "center", "valign": "vcenter", "text_wrap": True
-                        })
-                        for col, dt in enumerate(week_dates, start=1):
-                            ws.write_datetime(0, col, dt, date_fmt)
-                        for row, name in enumerate(pitch_names, start=1):
-                            ws.write(row, 0, name, cell_fmt)
-                        for row_idx, name in enumerate(pitch_names, start=1):
-                            for col_idx, dt in enumerate(week_dates, start=1):
-                                if name in ["3g-1", "3g-2"]:
-                                    t = activity.get(name, {}).get(dt)
-                                    cell = f"Activity starts {t}" if t else ""
-                                else:
-                                    loc, subloc, _ = next(m for m in pitch_mappings if m[2] == name)
-                                    bookings = df_grass[
-                                        (df_grass["location"] == loc) &
-                                        (df_grass["sublocation"] == subloc) &
-                                        (df_grass["date"] == dt)
-                                    ]
-                                    lines = []
-                                    for _, r in bookings.iterrows():
-                                        start, end = r["time"].split(" to ")
-                                        tm = f"{start.replace(':','')}-{end.replace(':','')}"
-                                        lines.append(f"{r['details']}\n{tm}")
-                                    cell = "\n".join(lines)
-                                ws.write(row_idx, col_idx, cell, cell_fmt)
-                    output.seek(0)
-                    st.download_button(
-                        label="Launch AutoGS",
-                        data=output.getvalue(),
-                        file_name=f"AutoGS_{monday.strftime('%Y%m%d')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+# ── Launch AutoGS download ──
+if not df_grass.empty:
+    # ensure dates are datetimes
+    df_grass["date"] = pd.to_datetime(df_grass["date"], dayfirst=True)
+    # drop Grounds-15 entries
+    df_export = df_grass[df_grass["type"] != "Grounds-15"].copy()
+
+    if df_export.empty:
+        st.error("No valid bookings to export (all rows are Grounds-15).")
+    else:
+        # compute all Monday starts in the data
+        mondays = sorted({
+            p.start_time
+            for p in df_export["date"].dt.to_period("W-MON")
+        })
+
+        # let user pick if there's more than one week
+        if len(mondays) > 1:
+            monday = st.selectbox(
+                "Select week starting Monday:",
+                mondays,
+                format_func=lambda dt: dt.strftime("%A %d/%m/%Y")
+            )
+        else:
+            monday = mondays[0]
+
+        week_dates = [monday + timedelta(days=i) for i in range(7)]
+
+        # prepare 3G activity
+        activity = {}
+        for loc in ["3g-1", "3g-2"]:
+            grp = df_export[df_export["location"] == loc].copy()
+            if not grp.empty:
+                grp["start_time"] = grp["time"].str.split(" to ").str[0]
+                act = grp.groupby("date", as_index=False)["start_time"].min()
+                activity[loc] = dict(zip(act["date"], act["start_time"]))
+
+        pitch_mappings = [
+            ("East (winter)", "Pitch 1",  "East 1"),
+            ("East (winter)", "Pitch 2",  "East 2"),
+            ("East (winter)", "Pitch 3",  "East 3"),
+            ("East (winter)", "Training", "East Training"),
+            ("East (summer)", "Pitch 1",  "Cricket"),
+            ("South",         "S 1",       "South 1"),
+            ("South",         "S 2",       "South 2"),
+            ("South",         "S 3",       "South 3"),
+            ("Cameron Bank",  "C B 1",     "CB1"),
+            ("Cameron Bank",  "C B 2",     "CB2"),
+        ]
+        pitch_names = [m[2] for m in pitch_mappings] + ["3g-1", "3g-2"]
+
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            wb = writer.book
+            ws = wb.add_worksheet("AutoGS")
+            writer.sheets["AutoGS"] = ws
+
+            date_fmt = wb.add_format({
+                "num_format": "dddd\n dd/mm/yyyy",
+                "align": "center", "valign": "vcenter", "text_wrap": True
+            })
+            cell_fmt = wb.add_format({
+                "align": "center", "valign": "vcenter", "text_wrap": True
+            })
+
+            # header row
+            for col, dt in enumerate(week_dates, start=1):
+                ws.write_datetime(0, col, dt, date_fmt)
+            # pitch names down first column
+            for row, name in enumerate(pitch_names, start=1):
+                ws.write(row, 0, name, cell_fmt)
+
+            # fill in bookings / activity
+            for row_idx, name in enumerate(pitch_names, start=1):
+                for col_idx, dt in enumerate(week_dates, start=1):
+                    if name in ["3g-1", "3g-2"]:
+                        t = activity.get(name, {}).get(dt)
+                        cell = f"Activity starts {t}" if t else ""
+                    else:
+                        loc, subloc, _ = next(m for m in pitch_mappings if m[2] == name)
+                        bookings = df_export[
+                            (df_export["location"] == loc) &
+                            (df_export["sublocation"] == subloc) &
+                            (df_export["date"] == dt)
+                        ]
+                        lines = []
+                        for _, r in bookings.iterrows():
+                            start, end = r["time"].split(" to ")
+                            tm = f"{start.replace(':','')}-{end.replace(':','')}"
+                            lines.append(f"{r['details']}\n{tm}")
+                        cell = "\n".join(lines)
+                    ws.write(row_idx, col_idx, cell, cell_fmt)
+
+        output.seek(0)
+        st.download_button(
+            label="Launch AutoGS",
+            data=output.getvalue(),
+            file_name=f"AutoGS_{monday.strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         
 # Full Processed Data Tab
 with tabs[2]:
