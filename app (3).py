@@ -413,7 +413,7 @@ with tabs[1]:
                                         start, end = r["time"].split(" to ")
                                         tm = f"{start.replace(':','')}-{end.replace(':','')}"
                                         lines.append(f"{desc}\n{tm}")
-                                    cell = "\n".join(lines)
+                                    cell = " // ".join(lines)
                                 ws.write(row_idx, col_idx, cell, cell_fmt)
                     output.seek(0)
                     st.download_button(
