@@ -69,11 +69,12 @@ def export_aggregated_excel_by_date(aggregated_all):
     cell_format = workbook.add_format({
         'text_wrap': True, 'border': 1, 'valign': 'top', 'font_size': 9
     })
-    unique_dates = aggregated_all['date'].unique()
+    # Ensure dates are sorted chronologically
+    unique_dates = sorted(aggregated_all['date'].unique())
     for d in unique_dates:
         sheet_data = aggregated_all[aggregated_all['date'] == d]
         sheet_data = sheet_data[['location','sublocation','time','type','booker','details']]
-        sheet_name = str(d)[:31]
+        sheet_name = d.strftime('%d.%m.%Y')[:31]
         worksheet = workbook.add_worksheet(sheet_name)
         for col_num, header in enumerate(sheet_data.columns):
             worksheet.write(0, col_num, header, header_format)
@@ -137,13 +138,11 @@ def agggrass(df):
     thresholds = {"3g-1": 2, "3g-2": 2, "Cameron Bank": 2, "South": 3}
     out = []
 
-    # Make sure empty details (or any column) aren’t dropped by groupby
     df = df.fillna({'date':'', 'time':'', 'type':'', 'booker':'', 'details':''})
 
     for loc, group in df.groupby("location", sort=False):
         if loc in thresholds:
             thr = thresholds[loc]
-            # group by all _other_ columns
             agg = (
                 group
                 .groupby(["date", "time", "type", "booker", "details"], as_index=False)
@@ -152,7 +151,6 @@ def agggrass(df):
             agg["location"] = loc
             out.append(agg[["date","location","sublocation","time","type","booker","details"]])
         else:
-            # no condensation
             out.append(group[["date","location","sublocation","time","type","booker","details"]])
 
     return pd.concat(out, ignore_index=True)
@@ -175,7 +173,6 @@ with st.expander("Load CSV or Enter Share Code"):
                 with open(shared_file_path, "r", encoding="latin-1") as f:
                     csv_data_from_shared_code = f.read()
                 st.success("CSV file loaded from share code.")
-                
                 # Show download button for the loaded CSV
                 st.download_button(
                     label="Download Shared CSV",
@@ -196,7 +193,6 @@ with st.expander("Load CSV or Enter Share Code"):
         except Exception as e:
             st.error(f"Error processing CSV file: {e}")
 
-# Determine which CSV to use
 if csv_data_from_shared_code:
     csv_text = csv_data_from_shared_code
 else:
@@ -220,40 +216,33 @@ with tabs[0]:
     if df is None:
         st.info("No CSV loaded.")
     else:
-        # Ensure missing details are handled
+        # Extract and transform
         df_extract = df.iloc[:, 23:30].copy()
         split_col = df_extract.iloc[:, 0].str.split(' - ', expand=True)
         split_col.columns = ['date', 'location']
         df_processed = pd.concat([split_col,
                                   df_extract.iloc[:, [3, 2, 4, 5, 6]].reset_index(drop=True)], axis=1)
         df_processed.columns = ['date', 'location', 'sublocation', 'time', 'type', 'booker', 'details']
+        # Parse to datetime and keep string for display
+        df_processed['date'] = pd.to_datetime(df_processed['date'], dayfirst=True, format='%d.%m.%Y')
+        df_processed['date_str'] = df_processed['date'].dt.strftime('%d.%m.%Y')
 
-        # Sort dates for end-start months
-        df_processed['date'] = pd.to_datetime(
-            df_processed['date'],
-            dayfirst=True,
-            format='%d.%m.%Y'
-        )
-
-        # Fill missing details with empty string
-        df_processed["details"] = df_processed["details"].fillna("")
-
-        # Exclude specific sublocations
+        df_processed['details'] = df_processed['details'].fillna("")
         excluded_sublocations = ["Chainey", "T R 1", "T R 2"]
-        df_processed = df_processed[~df_processed["sublocation"].isin(excluded_sublocations)]
+        df_processed = df_processed[~df_processed['sublocation'].isin(excluded_sublocations)]
 
-        date_options = sorted(df_processed['date'].unique())
+        date_options = sorted(df_processed['date_str'].unique())
         selected_dates = st.multiselect("Select Date(s)", options=["ALL"] + date_options, default=["ALL"])
         if "ALL" in selected_dates or not selected_dates:
             selected_dates = date_options
 
         location_options = sorted(df_processed['location'].unique())
-        selected_locations = st.multiselect("Select Location(s)", options=["ALL"] + location_options, default=["ALL"])
+        selected_locations = st.multiselect("Select Location(s)", options=["ALL"] + location_options, default=["ALL"])  
         if "ALL" in selected_locations or not selected_locations:
             selected_locations = location_options
 
         filtered_df = df_processed[
-            (df_processed['date'].isin(selected_dates)) & 
+            (df_processed['date_str'].isin(selected_dates)) &
             (df_processed['location'].isin(selected_locations))
         ]
 
@@ -261,8 +250,9 @@ with tabs[0]:
             st.write("No bookings found for the selected criteria.")
         else:
             agg_list = []
-            for d in sorted(filtered_df['date'].unique()):
-                st.subheader(f"Date: {d}")
+            for d_str in sorted(filtered_df['date_str'].unique()):
+                st.subheader(f"Date: {d_str}")
+                d = pd.to_datetime(d_str, dayfirst=True, format='%d.%m.%Y')
                 data_for_date = filtered_df[filtered_df['date'] == d]
                 aggregated_df = aggregate_bookings(data_for_date)
                 agg_list.append(aggregated_df)
@@ -279,9 +269,9 @@ with tabs[0]:
                             st.write(f"**Details:** {row['details']}")
             if agg_list:
                 aggregated_all = pd.concat(agg_list, ignore_index=True)
-                aggregated_export = aggregated_all.drop(columns=["date"])
+                aggregated_export = aggregated_all.drop(columns=['date'])
                 st.markdown("### Export Daily Overview Data")
-                if len(filtered_df['date'].unique()) > 1:
+                if len(filtered_df['date_str'].unique()) > 1:
                     excel_daily = export_aggregated_excel_by_date(aggregated_all)
                 else:
                     excel_daily = dataframe_to_excel(aggregated_export)
@@ -291,14 +281,13 @@ with tabs[0]:
                     file_name="daily_overview.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
-
+    
 # Grass Tab
 with tabs[1]:
     st.header("Grass Weekly Overview")
     if df is None:
         st.info("No CSV loaded.")
     else:
-        # 1) Prepare DataFrame
         grass_locations = ["East (summer)", "East (winter)", "Cameron Bank", "South", "3g-1", "3g-2"]
         df_extract = df.iloc[:, 23:30].copy()
         split_col = df_extract.iloc[:, 0].str.split(" - ", expand=True)
@@ -308,26 +297,23 @@ with tabs[1]:
             df_extract.iloc[:, [3,2,4,5,6]].reset_index(drop=True)
         ], axis=1)
         df_processed.columns = ["date","location","sublocation","time","type","booker","details"]
-        df_processed['date'] = pd.to_datetime(
-            df_processed['date'],
-            dayfirst=True,
-            format='%d.%m.%Y'
-        )
-        df_processed["details"] = df_processed["details"].fillna("")
-
-        df_grass = df_processed[df_processed["location"].isin(grass_locations)]
+        # parse to datetime
+        df_processed['date'] = pd.to_datetime(df_processed['date'], dayfirst=True, format='%d.%m.%Y')
+        # sort for logic
+        df_grass = df_processed[df_processed['location'].isin(grass_locations)]
         df_grass = df_grass.sort_values(
             by=["location","sublocation","date","time","type","booker"],
             ignore_index=True
         )
+        # keep original string for display
+        df_grass['date_str'] = df_grass['date'].dt.strftime('%d.%m.%Y')
 
         if df_grass.empty:
             st.write("No bookings found for the Grass locations in this file.")
         else:
-            # display bookings
             activity_sources = {}
             for loc in grass_locations:
-                grp = df_grass[df_grass["location"] == loc]
+                grp = df_grass[df_grass['location'] == loc]
                 if grp.empty:
                     st.write(f"No bookings for Location: {loc}")
                     continue
@@ -338,6 +324,8 @@ with tabs[1]:
                         df_to_show = agggrass(grp)
                     else:
                         df_to_show = grp
+                    # swap to use date_str
+                    df_to_show['date'] = df_to_show['date'].dt.strftime('%d.%m.%Y')
                     display_df = df_to_show[["date", "sublocation", "time", "type", "booker", "details"]]
                     styled = display_df.reset_index(drop=True).style.apply(highlight_rows, axis=1)
                     st.dataframe(styled)
@@ -350,21 +338,22 @@ with tabs[1]:
                     if src is not None:
                         with st.expander(f"{loc} Activity Begins"):
                             tmp = src.copy()
-                            tmp["start_time"] = tmp["time"].str.split(" to ").str[0]
+                            tmp['start_time'] = tmp['time'].str.split(" to ").str[0]
                             act = (
                                 tmp
                                 .groupby("date", as_index=False)["start_time"]
                                 .min()
                                 .rename(columns={"start_time":"activity begins"})
                             )
+                            # convert date for display
+                            act['date'] = act['date'].dt.strftime('%d.%m.%Y')
                             st.dataframe(act.reset_index(drop=True), height=200)
                     else:
                         st.write(f"No data for {loc}")
             # Launch AutoGS download
             if not df_grass.empty:
-                # ensure dates are datetimes
-                df_grass["date"] = pd.to_datetime(df_grass["date"], dayfirst=True)
-                earliest = df_grass["date"].min()
+                df_grass['date'] = pd.to_datetime(df_grass['date'], dayfirst=True)
+                earliest = df_grass['date'].min()
                 if earliest.weekday() != 0:
                     st.error(f"Earliest date {earliest.strftime('%A %d/%m/%Y')} is not a Monday.")
                 else:
@@ -374,7 +363,7 @@ with tabs[1]:
                     for loc in ["3g-1", "3g-2"]:
                         grp = df_grass[df_grass["location"] == loc].copy()
                         if not grp.empty:
-                            grp["start_time"] = grp["time"].str.split(" to ").str[0]
+                            grp['start_time'] = grp['time'].str.split(" to ").str[0]
                             act = grp.groupby("date", as_index=False)["start_time"].min()
                             activity[loc] = dict(zip(act["date"], act["start_time"]))
                     pitch_mappings = [
